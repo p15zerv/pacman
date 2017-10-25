@@ -10,16 +10,17 @@
             background-color: #000;
         }
     </style>
+	
     <script src="//cdn.jsdelivr.net/phaser/2.2.2/phaser.min.js"></script>
 </head>
 <body>
-
+	
     <script type="text/javascript">
-
+	// src="//cdn.jsdelivr.net/phaser/2.2.2/phaser.min.js"
     var game = new Phaser.Game(448, 496, Phaser.AUTO);
 
     var Pacman = function (game) {
-
+		
         this.map = null;
         this.layer = null;
         this.pacman = null;
@@ -27,8 +28,8 @@
         this.safetile = 14;
         this.gridsize = 16;
 
-        this.speed = 150;
-        this.threshold = 3;
+        this.speed = 100;
+        this.threshold = 2;
 
         this.marker = new Phaser.Point();
         this.turnPoint = new Phaser.Point();
@@ -59,28 +60,46 @@
 
             //  We need this because the assets are on github pages
             //  Remove the next 2 lines if running locally
-            this.load.baseURL = 'https://p15zerv.github.io/pacman/';
-            this.load.crossOrigin = 'anonymous';
-
-            this.load.image('dot', 'assets/dot.png');
-            this.load.image('tiles', 'assets/pacman-tiles.png');
-            this.load.spritesheet('pacman', 'assets/pacman.png', 32, 32);
-            this.load.tilemap('map', 'assets/pacman-map.json', null, Phaser.Tilemap.TILED_JSON);
-
+            //this.load.baseURL = 'https://p15zerv.github.io/pacman/';
+            //this.load.crossOrigin = 'anonymous';
+			
+			
+			// Initial Assets
+            //this.load.image('dot', 'assets/dot.png');
+            //this.load.image('tiles', 'assets/pacman-tiles.png');
+            //this.load.spritesheet('pacman', 'assets/pacman.png', 32, 32);
+            //this.load.tilemap('map', 'assets/pacman-map.json', null, Phaser.Tilemap.TILED_JSON);
+			
+			this.load.image('dot', 'assets/dot.png');
+			this.load.image('flower', 'assets/flower.png');
+            this.load.image('tiles', 'assets/red-tiles.png');
+			this.load.image('basket', 'assets/basket.png');
+            this.load.spritesheet('pacman', 'assets/red2.png', 32, 32);
+            this.load.tilemap('map', 'assets/new-map.json', null, Phaser.Tilemap.TILED_JSON);
+			this.load.audio('music', 'audio/music.mp3');
+			this.load.audio('pickup', 'audio/pickup.wav');
+			this.load.audio('powerup', 'audio/powerup.wav');
+			
             //  Needless to say, graphics (C)opyright Namco
 
         },
 
         create: function () {
-
+			this.music = this.game.add.audio('music', 1, true);
+			this.pickup = this.game.add.audio('pickup');
+			this.powerup = this.game.add.audio('powerup');
+			this.music.play();
+			
+			
             this.map = this.add.tilemap('map');
-            this.map.addTilesetImage('pacman-tiles', 'tiles');
-
+            this.map.addTilesetImage('red-tiles.png', 'tiles');
+			
             this.layer = this.map.createLayer('Pacman');
 
             this.dots = this.add.physicsGroup();
 
             this.map.createFromTiles(7, this.safetile, 'dot', this.layer, this.dots);
+			this.map.createFromTiles(35, this.safetile, 'flower', this.layer, this.dots);
 
             //  The dots will need to be offset by 6px to put them back in the middle of the grid
             this.dots.setAll('x', 6, false, false, 1);
@@ -94,14 +113,55 @@
             this.pacman.anchor.set(0.5);
             this.pacman.animations.add('munch', [0, 1, 2, 1], 20, true);
 
-            this.physics.arcade.enable(this.pacman);
-            this.pacman.body.setSize(16, 16, 0, 0);
+			this.physics.arcade.enable(this.pacman);
+			this.pacman.body.setSize(16, 16, 0, 0);
 
             this.cursors = this.input.keyboard.createCursorKeys();
 
+			this.scoreValue = 0;
+			this.highscoreValue = 0;
+			
+			//  Testing score saving
+			this.loadObject = localStorage.getItem("save");
+			if (this.loadObject){
+				this.loadObject = JSON.parse(this.loadObject);
+				this.highscoreValue = this.loadObject.highscoreValue;
+			}
+			
+			this.scoreText = this.add.text(150, 30, "SCORE", {font: "Bold 16px Times New Roman", fill: "#000000", align: "left"});
+			this.scoreText.anchor.setTo(0.5, 0.5);
+			
+			this.score = this.add.text(150, 50, "", {font: "Bold 16px Times New Roman", fill: "#000000", align: "left"});
+			this.score.anchor.setTo(0.5, 0.5);
+			
+			this.highscoreText = this.add.text(285, 30, "HIGH SCORE", {font: "Bold 16px Times New Roman", fill: "#000000", align: "center"});
+			this.highscoreText.anchor.setTo(0.5, 0.5);
+			
+			this.highscore = this.add.text(285, 50, "", {font: "Bold 16px Times New Roman", fill: "#000000", align: "left"});
+			this.highscore.anchor.setTo(0.5, 0.5);
+			
+			//  Life system
+			this.lifeCounter = 3;
+			
+			this.life = this.add.text(225, 450, "LIVES", {font: "Bold 16px Times New Roman", fill: "#000000", align: "left"});
+			this.life.anchor.setTo(0.5, 0.5);
+			
+			this.lifeText =  this.add.text(225, 470, "", {font: "Bolt 16px Times New Roman", fill: "#000000", align: "left"});
+			this.lifeText.anchor.setTo(0.5, 0.5);
+			
+			//  Stage Timer
+			this.stageTimer = this.time.create(false);
+			this.stageTimer.start();
+			this.timerText = this.add.text(225, 420, "", {font: "Bold 16px Times New Roman", fill: "#000000", align: "left"});
+			this.timerText.anchor.setTo(0.5, 0.5);
+			
+			// Bonus Timer Event
+			game.time.events.add(Phaser.Timer.SECOND * (Math.floor(Math.random()*10)+10), this.createBonus, this);
+			
             this.pacman.play('munch');
             this.move(Phaser.LEFT);
-
+			
+			
         },
 
         checkKeys: function () {
@@ -217,26 +277,80 @@
             this.current = direction;
 
         },
-
+		
         eatDot: function (pacman, dot) {
-
+			
             dot.kill();
-
+			this.updateScore(100);
+			this.pickup.play();
+				
             if (this.dots.total === 0)
             {
+				this.updateLifeCounter(-1);
                 this.dots.callAll('revive');
+				//  Testing score saving
+				saveObject = {
+					highscoreValue: this.highscoreValue
+				};
+				localStorage.setItem("save", JSON.stringify(saveObject));
+				
+				// Reset Timer
+				this.stageTimer.destroy();
+				this.stageTimer = this.time.create(false);
+				this.stageTimer.start();
+				game.time.events.add(Phaser.Timer.SECOND * (Math.floor(Math.random()*10)+10), this.createBonus, this);
             }
 
         },
-
+		
+		updateScore: function(value) {
+			this.scoreValue += value;
+			if (this.highscoreValue < this.scoreValue){
+				this.highscoreValue = this.scoreValue;
+			}
+			return true;
+		},
+		
+		updateLifeCounter: function(value) {
+			this.lifeCounter += value;
+			if (this.lifeCounter === 0){
+				this.world.removeAll();
+				this.gameoverText = this.add.text(224, 248, "GAME OVER", {font: "Bold 24px Times New Roman", fill: "#ff0000", align: "left"})
+				
+			}
+		},
+		
+		createBonus: function() {
+			this.bonus = this.add.sprite((14 * 16), (17 * 16)+8, 'basket', 0);
+            this.bonus.anchor.set(0.5);
+			this.physics.arcade.enable(this.bonus);
+			//game.time.events.add(Phaser.Timer.SECOND * 10, this.killBonus, this);
+			console.log("Bonus Created "+this.time.now);
+			game.time.events.add(Phaser.Timer.SECOND * 10, this.bonus.kill, this.bonus);
+		},
+		
+		eatBonus: function() {
+			this.bonus.kill();
+			this.updateScore(1000);
+			this.powerup.play();
+			console.log("Bonus Eaten "+this.time.now);
+		},
+		
         update: function () {
           
             this.physics.arcade.collide(this.pacman, this.layer);
             this.physics.arcade.overlap(this.pacman, this.dots, this.eatDot, null, this);
+			this.physics.arcade.overlap(this.pacman, this.bonus, this.eatBonus, null, this);
 
             this.marker.x = this.math.snapToFloor(Math.floor(this.pacman.x), this.gridsize) / this.gridsize;
             this.marker.y = this.math.snapToFloor(Math.floor(this.pacman.y), this.gridsize) / this.gridsize;
-
+			
+			this.score.setText(this.scoreValue);
+			this.highscore.setText(this.highscoreValue);
+			this.lifeText.setText(this.lifeCounter);
+			//this.timerText.setText(Math.floor(this.stageTimer.seconds*10)/10);
+			this.timerText.setText(this.stageTimer.seconds.toFixed(3));
+			
             //  Update our grid sensors
             this.directions[1] = this.map.getTileLeft(this.layer.index, this.marker.x, this.marker.y);
             this.directions[2] = this.map.getTileRight(this.layer.index, this.marker.x, this.marker.y);
@@ -251,7 +365,7 @@
             }
 
         }
-
+		
     };
 
     game.state.add('Game', Pacman, true);
