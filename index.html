@@ -60,22 +60,25 @@
 
 			//  We need this because the assets are on github pages
 			//  Remove the next 2 lines if running locally
-			//this.load.baseURL = 'https://p15zerv.github.io/pacman/';
-			//this.load.crossOrigin = 'anonymous';
+			this.load.baseURL = 'https://p15zerv.github.io/pacman/';
+			this.load.crossOrigin = 'anonymous';
 			
 			
-			//  Initial Assets
+			//  Original Assets
 			//this.load.image('dot', 'assets/dot.png');
 			//this.load.image('tiles', 'assets/pacman-tiles.png');
 			//this.load.spritesheet('pacman', 'assets/pacman.png', 32, 32);
 			//this.load.tilemap('map', 'assets/pacman-map.json', null, Phaser.Tilemap.TILED_JSON);
 			
+			//  Loading new assets
 			this.load.image('dot', 'assets/dot.png');
 			this.load.image('flower', 'assets/flower.png');
 			this.load.image('tiles', 'assets/red-tiles.png');
 			this.load.image('basket', 'assets/basket.png');
 			this.load.spritesheet('pacman', 'assets/red2.png', 32, 32);
 			this.load.tilemap('map', 'assets/new-map.json', null, Phaser.Tilemap.TILED_JSON);
+			
+			//  Loading audio files
 			this.load.audio('music', 'audio/music.mp3');
 			this.load.audio('pickup', 'audio/pickup.wav');
 			this.load.audio('powerup', 'audio/powerup.wav');
@@ -87,9 +90,12 @@
 		},
 
 		create: function () {
+			//  Adding sound effects and music
 			this.music = this.game.add.audio('music', 1, true);
 			this.pickup = this.game.add.audio('pickup');
 			this.powerup = this.game.add.audio('powerup');
+			
+			//  Playing music
 			this.music.play();
 			
 			
@@ -100,6 +106,7 @@
 
 			this.dots = this.add.physicsGroup();
 
+			//  Adding dots and flowers to map
 			this.map.createFromTiles(7, this.safetile, 'dot', this.layer, this.dots);
 			this.map.createFromTiles(35, this.safetile, 'flower', this.layer, this.dots);
 
@@ -119,17 +126,18 @@
 			this.pacman.body.setSize(16, 16, 0, 0);
 
 			this.cursors = this.input.keyboard.createCursorKeys();
-
+			
+			// Implementing save system, saves high score using localStorage
 			this.scoreValue = 0;
 			this.highscoreValue = 0;
 			
-			//  Testing score saving
 			this.loadObject = localStorage.getItem("save");
 			if (this.loadObject){
 				this.loadObject = JSON.parse(this.loadObject);
 				this.highscoreValue = this.loadObject.highscoreValue;
 			}
 			
+			//  Adding text
 			this.scoreText = this.add.text(150, 30, "SCORE", {font: "Bold 16px Times New Roman", fill: "#000000", align: "left"});
 			this.scoreText.anchor.setTo(0.5, 0.5);
 			
@@ -151,7 +159,7 @@
 			this.lifeText =	 this.add.text(225, 470, "", {font: "Bolt 16px Times New Roman", fill: "#000000", align: "left"});
 			this.lifeText.anchor.setTo(0.5, 0.5);
 			
-			//	Stage Timer
+			//  Stage Timer
 			this.stageTimer = this.time.create(false);
 			this.stageTimer.start();
 			this.timerText = this.add.text(225, 420, "", {font: "Bold 16px Times New Roman", fill: "#000000", align: "left"});
@@ -283,29 +291,32 @@
 		eatDot: function (pacman, dot) {
 			
 			dot.kill();
+			//  Update score and play pickup sound effect when dot is eaten
 			this.updateScore(100);
 			this.pickup.play();
 				
 			if (this.dots.total === 0)
 			{
+				//  There are currently no other ways to lose lives, so one life is lost when all the dots are eaten
 				this.updateLifeCounter(-1);
+				
 				this.dots.callAll('revive');
-				//	Testing score saving
+				//  Update high score save when the stage is complete, this will most likely be implemented in a separate function later on
 				saveObject = {
 					highscoreValue: this.highscoreValue
 				};
 				localStorage.setItem("save", JSON.stringify(saveObject));
 				
-				// Reset Timer
+				//  Reset Timer
 				this.stageTimer.destroy();
 				this.stageTimer = this.time.create(false);
 				this.stageTimer.start();
 				game.time.events.add(Phaser.Timer.SECOND * (Math.floor(Math.random()*10)+10), this.createBonus, this);
 			}
-
 		},
 		
 		updateScore: function(value) {
+			//  Updates scoreValue which holds our current score. Also updates highscoreValue if (score > highscore)
 			this.scoreValue += value;
 			if (this.highscoreValue < this.scoreValue){
 				this.highscoreValue = this.scoreValue;
@@ -314,43 +325,43 @@
 		},
 		
 		updateLifeCounter: function(value) {
+			//  Updates life counter, if life counter reaches zero display game over screen
 			this.lifeCounter += value;
 			if (this.lifeCounter === 0){
 				this.world.removeAll();
 				this.gameoverText = this.add.text(224, 248, "GAME OVER", {font: "Bold 24px Times New Roman", fill: "#ff0000", align: "left"})
-				
 			}
 		},
 		
 		createBonus: function() {
+			//  Creates the timed bonus, if it's not picked up within 10 seconds the bonus is destroyed
 			this.bonus = this.add.sprite((14 * 16), (17 * 16)+8, 'basket', 0);
 			this.bonus.anchor.set(0.5);
 			this.physics.arcade.enable(this.bonus);
-			//game.time.events.add(Phaser.Timer.SECOND * 10, this.killBonus, this);
-			console.log("Bonus Created "+this.time.now);
+			//console.log("Bonus Created "+this.time.now);
 			game.time.events.add(Phaser.Timer.SECOND * 10, this.bonus.kill, this.bonus);
 		},
 		
 		eatBonus: function() {
+			//  Destroys the timed bonus when it is picked up, updates the score counter and plays the powerup effect
 			this.bonus.kill();
 			this.updateScore(1000);
 			this.powerup.play();
-			console.log("Bonus Eaten "+this.time.now);
 		},
 		
 		update: function () {
-		  
 			this.physics.arcade.collide(this.pacman, this.layer);
 			this.physics.arcade.overlap(this.pacman, this.dots, this.eatDot, null, this);
+			//  Calls the eatBonus function if the pacman sprite overlaps with the bonus sprite
 			this.physics.arcade.overlap(this.pacman, this.bonus, this.eatBonus, null, this);
 
 			this.marker.x = this.math.snapToFloor(Math.floor(this.pacman.x), this.gridsize) / this.gridsize;
 			this.marker.y = this.math.snapToFloor(Math.floor(this.pacman.y), this.gridsize) / this.gridsize;
 			
+			//  Update text 
 			this.score.setText(this.scoreValue);
 			this.highscore.setText(this.highscoreValue);
 			this.lifeText.setText(this.lifeCounter);
-			//this.timerText.setText(Math.floor(this.stageTimer.seconds*10)/10);
 			this.timerText.setText(this.stageTimer.seconds.toFixed(3));
 			
 			//  Update our grid sensors
