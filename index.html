@@ -405,10 +405,10 @@
 			var i=0;
 			var currentDirection;
 			var rand;
-			if (size(openDirs) > 2){
+			if ((openDirs.length) > 2){
 				currentDirection = ghostAngle();
 				if(this.ghostDirections[currentDirection].index !== this.safetile){
-					rand = Math.floor(Math.random()*size(openDirs)-1);
+					rand = Math.floor(Math.random()*openDirs.length-1);
 					moveGhost(openDirs[rand]);
 				}
 			}
