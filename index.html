@@ -10,17 +10,17 @@
 			background-color: #000;
 		}
 	</style>
-	
+
 	<script src="//cdn.jsdelivr.net/phaser/2.2.2/phaser.min.js"></script>
 </head>
 <body>
-	
+
 	<script type="text/javascript">
 	// src="//cdn.jsdelivr.net/phaser/2.2.2/phaser.min.js"
 	var game = new Phaser.Game(448, 496, Phaser.AUTO);
 
 	var Pacman = function (game) {
-		
+
 		this.map = null;
 		this.layer = null;
 		this.pacman = null;
@@ -32,9 +32,11 @@
 		this.threshold = 2;
 
 		this.marker = new Phaser.Point();
+		this.ghostMarker = new Phaser.Point();
 		this.turnPoint = new Phaser.Point();
 
 		this.directions = [ null, null, null, null, null ];
+		this.ghostDirections = [null, null, null, null, null];
 		this.opposites = [ Phaser.NONE, Phaser.RIGHT, Phaser.LEFT, Phaser.DOWN, Phaser.UP ];
 
 		this.current = Phaser.NONE;
@@ -60,16 +62,16 @@
 
 			//  We need this because the assets are on github pages
 			//  Remove the next 2 lines if running locally
-			this.load.baseURL = 'https://p15zerv.github.io/pacman/';
-			this.load.crossOrigin = 'anonymous';
-			
-			
+			//this.load.baseURL = 'https://p15zerv.github.io/pacman/';
+			//this.load.crossOrigin = 'anonymous';
+
+
 			//  Original Assets
 			//this.load.image('dot', 'assets/dot.png');
 			//this.load.image('tiles', 'assets/pacman-tiles.png');
 			//this.load.spritesheet('pacman', 'assets/pacman.png', 32, 32);
 			//this.load.tilemap('map', 'assets/pacman-map.json', null, Phaser.Tilemap.TILED_JSON);
-			
+
 			//  Loading new assets
 			this.load.image('dot', 'assets/dot.png');
 			this.load.image('flower', 'assets/flower.png');
@@ -77,7 +79,9 @@
 			this.load.image('basket', 'assets/basket.png');
 			this.load.spritesheet('pacman', 'assets/red2.png', 32, 32);
 			this.load.tilemap('map', 'assets/new-map.json', null, Phaser.Tilemap.TILED_JSON);
-			
+
+			this.load.spritesheet('ghost', 'assets/ghost.png', 32, 32);
+
 			//  Loading audio files
 			this.load.audio('music', 'audio/music.mp3');
 			this.load.audio('pickup', 'audio/pickup.wav');
@@ -94,14 +98,14 @@
 			this.music = this.game.add.audio('music', 1, true);
 			this.pickup = this.game.add.audio('pickup');
 			this.powerup = this.game.add.audio('powerup');
-			
+
 			//  Playing music
 			this.music.play();
-			
-			
+
+
 			this.map = this.add.tilemap('map');
 			this.map.addTilesetImage('red-tiles.png', 'tiles');
-			
+
 			this.layer = this.map.createLayer('Pacman');
 
 			this.dots = this.add.physicsGroup();
@@ -120,58 +124,67 @@
 			//  Position Pacman at grid location 14x17 (the +8 accounts for his anchor)
 			this.pacman = this.add.sprite((14 * 16) + 8, (17 * 16) + 8, 'pacman', 0);
 			this.pacman.anchor.set(0.5);
-			this.pacman.animations.add('munch', [0, 1, 2, 1], 20, true);
+			this.pacman.animations.add('munch', [0, 1, 2, 1], 10, true);
 
 			this.physics.arcade.enable(this.pacman);
 			this.pacman.body.setSize(16, 16, 0, 0);
 
 			this.cursors = this.input.keyboard.createCursorKeys();
-			
+
+			this.ghost = this.add.sprite((1*16) + 8, (17 * 16) + 8, 'ghost', 0);
+			this.ghost.anchor.set(0.5);
+			this.ghost.animations.add('float', [0, 1], 5, true);
+
+			this.physics.arcade.enable(this.ghost);
+			this.ghost.body.setSize(16, 16, 0, 0);
+
 			// Implementing save system, saves high score using localStorage
 			this.scoreValue = 0;
 			this.highscoreValue = 0;
-			
+
 			this.loadObject = localStorage.getItem("save");
 			if (this.loadObject){
 				this.loadObject = JSON.parse(this.loadObject);
 				this.highscoreValue = this.loadObject.highscoreValue;
 			}
-			
+
 			//  Adding text
 			this.scoreText = this.add.text(150, 30, "SCORE", {font: "Bold 16px Times New Roman", fill: "#000000", align: "left"});
 			this.scoreText.anchor.setTo(0.5, 0.5);
-			
+
 			this.score = this.add.text(150, 50, "", {font: "Bold 16px Times New Roman", fill: "#000000", align: "left"});
 			this.score.anchor.setTo(0.5, 0.5);
-			
+
 			this.highscoreText = this.add.text(285, 30, "HIGH SCORE", {font: "Bold 16px Times New Roman", fill: "#000000", align: "center"});
 			this.highscoreText.anchor.setTo(0.5, 0.5);
-			
+
 			this.highscore = this.add.text(285, 50, "", {font: "Bold 16px Times New Roman", fill: "#000000", align: "left"});
 			this.highscore.anchor.setTo(0.5, 0.5);
-			
+
 			//  Life system
 			this.lifeCounter = 3;
-			
+
 			this.life = this.add.text(225, 450, "LIVES", {font: "Bold 16px Times New Roman", fill: "#000000", align: "left"});
 			this.life.anchor.setTo(0.5, 0.5);
-			
+
 			this.lifeText =	 this.add.text(225, 470, "", {font: "Bolt 16px Times New Roman", fill: "#000000", align: "left"});
 			this.lifeText.anchor.setTo(0.5, 0.5);
-			
+
 			//  Stage Timer
 			this.stageTimer = this.time.create(false);
 			this.stageTimer.start();
 			this.timerText = this.add.text(225, 420, "", {font: "Bold 16px Times New Roman", fill: "#000000", align: "left"});
 			this.timerText.anchor.setTo(0.5, 0.5);
-			
+
 			// Bonus Timer Event
 			game.time.events.add(Phaser.Timer.SECOND * (Math.floor(Math.random()*10)+10), this.createBonus, this);
-			
+
 			this.pacman.play('munch');
+			this.ghost.play('float');
+			this.ghost.body.velocity.x = -this.speed;
 			this.move(Phaser.LEFT);
-			
-			
+
+
 		},
 
 		checkKeys: function () {
@@ -287,26 +300,26 @@
 			this.current = direction;
 
 		},
-		
+
 		eatDot: function (pacman, dot) {
-			
+
 			dot.kill();
 			//  Update score and play pickup sound effect when dot is eaten
 			this.updateScore(100);
 			this.pickup.play();
-				
+
 			if (this.dots.total === 0)
 			{
 				//  There are currently no other ways to lose lives, so one life is lost when all the dots are eaten
 				this.updateLifeCounter(-1);
-				
+
 				this.dots.callAll('revive');
 				//  Update high score save when the stage is complete, this will most likely be implemented in a separate function later on
 				saveObject = {
 					highscoreValue: this.highscoreValue
 				};
 				localStorage.setItem("save", JSON.stringify(saveObject));
-				
+
 				//  Reset Timer
 				this.stageTimer.destroy();
 				this.stageTimer = this.time.create(false);
@@ -314,7 +327,7 @@
 				game.time.events.add(Phaser.Timer.SECOND * (Math.floor(Math.random()*10)+10), this.createBonus, this);
 			}
 		},
-		
+
 		updateScore: function(value) {
 			//  Updates scoreValue which holds our current score. Also updates highscoreValue if (score > highscore)
 			this.scoreValue += value;
@@ -323,7 +336,7 @@
 			}
 			return true;
 		},
-		
+
 		updateLifeCounter: function(value) {
 			//  Updates life counter, if life counter reaches zero display game over screen
 			this.lifeCounter += value;
@@ -332,7 +345,7 @@
 				this.gameoverText = this.add.text(224, 248, "GAME OVER", {font: "Bold 24px Times New Roman", fill: "#ff0000", align: "left"})
 			}
 		},
-		
+
 		createBonus: function() {
 			//  Creates the timed bonus, if it's not picked up within 10 seconds the bonus is destroyed
 			this.bonus = this.add.sprite((14 * 16), (17 * 16)+8, 'basket', 0);
@@ -341,29 +354,35 @@
 			//console.log("Bonus Created "+this.time.now);
 			game.time.events.add(Phaser.Timer.SECOND * 10, this.bonus.kill, this.bonus);
 		},
-		
+
 		eatBonus: function() {
 			//  Destroys the timed bonus when it is picked up, updates the score counter and plays the powerup effect
 			this.bonus.kill();
 			this.updateScore(1000);
 			this.powerup.play();
 		},
-		
+
 		update: function () {
 			this.physics.arcade.collide(this.pacman, this.layer);
+			this.physics.arcade.collide(this.ghost, this.layer);
+
 			this.physics.arcade.overlap(this.pacman, this.dots, this.eatDot, null, this);
 			//  Calls the eatBonus function if the pacman sprite overlaps with the bonus sprite
 			this.physics.arcade.overlap(this.pacman, this.bonus, this.eatBonus, null, this);
+			this.physics.arcade.collide(this.pacman, this.ghost);
 
 			this.marker.x = this.math.snapToFloor(Math.floor(this.pacman.x), this.gridsize) / this.gridsize;
 			this.marker.y = this.math.snapToFloor(Math.floor(this.pacman.y), this.gridsize) / this.gridsize;
-			
-			//  Update text 
+
+			this.ghostMarker.x = this.math.snapToFloor(Math.floor(this.ghost.x), this.gridsize) / this.gridsize;
+			this.ghostMarker.y = this.math.snapToFloor(Math.floor(this.ghost.y), this.gridsize) / this.gridsize;
+
+			//  Update text
 			this.score.setText(this.scoreValue);
 			this.highscore.setText(this.highscoreValue);
 			this.lifeText.setText(this.lifeCounter);
 			this.timerText.setText(this.stageTimer.seconds.toFixed(3));
-			
+
 			//  Update our grid sensors
 			this.directions[1] = this.map.getTileLeft(this.layer.index, this.marker.x, this.marker.y);
 			this.directions[2] = this.map.getTileRight(this.layer.index, this.marker.x, this.marker.y);
@@ -377,8 +396,87 @@
 				this.turn();
 			}
 
+		},
+
+		ghostAI : function () {
+			var openDirs = this.checkGhostDirections();
+			var i=0;
+			var currentDirection;
+			var rand;
+			if (size(openDirs) > 2){
+				currentDirection = ghostAngle();
+				if(this.ghostDirections[currentDirection].index !== this.safetile){
+					rand = Math.floor(Math.random()*size(openDirs)-1);
+					moveGhost(openDirs[rand]);
+				}
+			}
+
+			}
+		},
+
+		checkGhostDirections : function() {
+			var i=0;
+			var openDirs = [];
+			this.ghostDirections[1] = this.map.getTileLeft(this.layer.index, this.ghostMarker.x, this.ghostMarker.y);
+			this.ghostDirections[2] = this.map.getTileRight(this.layer.index, this.ghostMarker.x, this.ghostMarker.y);
+			this.ghostDirections[3] = this.map.getTileAbove(this.layer.index, this.ghostMarker.x, this.ghostMarker.y);
+			this.ghostDirections[4] = this.map.getTileBelow(this.layer.index, this.ghostMarker.x, this.ghostMarker.y);
+			for(i=1; i<5; i++){
+				if(this.ghostDirections[i].index === this.safetile)
+					openDirs.pop(i);
+			}
+			return openDirs;
+		},
+
+		ghostAngle : function() {
+			if (this.ghost.angle === 0) {
+				return 2;
+			}else if (this.ghost.angle === 90){
+				return 3;
+			}else if (this.ghost.angle === 180 || this.ghost.angle === -180){
+				return 1;
+			}else if (this.ghost.angle === -90){
+				return 4;
+			}
+		},
+
+		moveGhost: function (direction) {
+
+			var speed = this.speed;
+
+			if (direction === Phaser.LEFT || direction === Phaser.UP)
+			{
+				speed = -speed;
+			}
+
+			if (direction === Phaser.LEFT || direction === Phaser.RIGHT)
+			{
+				this.ghost.body.velocity.x = speed;
+			}
+			else
+			{
+				this.ghost.body.velocity.y = speed;
+			}
+
+			//  Reset the scale and angle (Pacman is facing to the right in the sprite sheet)
+			this.ghost.scale.x = 1;
+			this.ghost.angle = 0;
+
+			if (direction === Phaser.LEFT)
+			{
+				this.ghost.scale.x = -1;
+			}
+			else if (direction === Phaser.UP)
+			{
+				this.ghost.angle = 270;
+			}
+			else if (direction === Phaser.DOWN)
+			{
+				this.ghost.angle = 90;
+			}
+
 		}
-		
+
 	};
 
 	game.state.add('Game', Pacman, true);
