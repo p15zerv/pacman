@@ -388,7 +388,9 @@
 			this.directions[2] = this.map.getTileRight(this.layer.index, this.marker.x, this.marker.y);
 			this.directions[3] = this.map.getTileAbove(this.layer.index, this.marker.x, this.marker.y);
 			this.directions[4] = this.map.getTileBelow(this.layer.index, this.marker.x, this.marker.y);
-
+			
+			ghostAI();
+			
 			this.checkKeys();
 
 			if (this.turning !== Phaser.NONE)
