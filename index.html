@@ -7,7 +7,7 @@
 	body {
 		margin: 0;
 		padding: 0;
-		background-color: #000;
+		background-color: #000000;
 	}
 	</style>
 
@@ -16,7 +16,59 @@
 <body>
 
 	<script type="text/javascript">
+	// #216723
 	var game = new Phaser.Game(448, 496, Phaser.AUTO);
+
+	var Menu = function (game) {
+		this.map = null;
+		this.layer = null;
+	}
+
+	Menu.prototype = {
+		init: function(){
+			this.scale.scaleMode = Phaser.ScaleManager.SHOW_ALL;
+			this.scale.pageAlignHorizontally = true;
+			this.scale.pageAlignVertically = true;
+
+			Phaser.Canvas.setImageRenderingCrisp(this.game.canvas);
+		},
+
+		preload: function() {
+			this.load.image('stage1', 'assets/stage1.png');
+			this.load.image('play', 'assets/play.png');
+			this.load.image('left_arrow', 'assets/arrow_left.png');
+			this.load.image('right_arrow', 'assets/arrow_right.png');
+			this.load.image('logo', 'assets/logo.png');
+		},
+
+		create: function() {
+			this.stage = game.add.sprite(0, 0, 'stage1');
+
+			this.logo = game.add.sprite(game.world.centerX, game.height * 0.1, 'logo');
+			this.logo.anchor.set(0.5);
+
+			this.p = game.add.sprite(game.world.centerX * 1.05, game.world.centerY, 'play');
+			this.p.anchor.set(0.5, 0.5);
+			this.p.inputEnabled = true;
+			
+			this.left = game.add.sprite(game.width * 0.10, game.world.centerY, 'left_arrow');
+			this.left.anchor.set(0.5);
+			
+			this.right = game.add.sprite(game.width * 0.90, game.world.centerY, 'right_arrow');
+			this.right.anchor.set(0.5);
+			
+
+			this.p.events.onInputDown.add(this.listener, this);
+			
+		},
+
+		listener: function() {
+			game.state.start('Game');
+		},
+
+		update: function() {
+		}
+	};
 
 	var Pacman = function (game) {
 		this.map = null;
@@ -27,21 +79,23 @@
 		this.gridsize = 16;
 
 		this.speed = 100;
+		this.ghostSpeed = 100;
 		this.threshold = 2;
 
+		this.aggro = 0;
+
 		this.marker = new Phaser.Point();
-		this.ghostMarker = new Phaser.Point();
 
 		this.turnPoint = new Phaser.Point();
-		this.ghostTurnPoint = new Phaser.Point();
 
 		this.directions = [ null, null, null, null, null ];
-		this.ghostDirections = [null, null, null, null, null];
 		this.opposites = [ Phaser.NONE, Phaser.RIGHT, Phaser.LEFT, Phaser.DOWN, Phaser.UP ];
 
 		this.current = Phaser.NONE;
 		this.turning = Phaser.NONE;
-		this.ghostTurning = Phaser.NONE;
+
+		this.delay = 250;
+		this.duration = 7.5;
 
 	};
 
@@ -78,8 +132,9 @@
 			this.load.image('flower', 'assets/flower.png');
 			this.load.image('tiles', 'assets/red-tiles.png');
 			this.load.image('basket', 'assets/basket.png');
+			this.load.image('fruit', 'assets/fruit.png');
 			this.load.spritesheet('pacman', 'assets/red2.png', 32, 32);
-			this.load.tilemap('map', 'assets/new-map2.json', null, Phaser.Tilemap.TILED_JSON);
+			this.load.tilemap('map', 'assets/my-map.json', null, Phaser.Tilemap.TILED_JSON);
 
 			this.load.spritesheet('ghost', 'assets/ghost.png', 32, 32);
 
@@ -103,52 +158,41 @@
 			//  Playing music
 			this.music.play();
 
-
 			this.map = this.add.tilemap('map');
 			this.map.addTilesetImage('red-tiles.png', 'tiles');
 
 			this.layer = this.map.createLayer('Pacman');
 
 			this.dots = this.add.physicsGroup();
+			this.flowers = this.add.physicsGroup();
+			this.fruit = this.add.physicsGroup();
 
-			//  Adding dots and flowers to map
+			//  Adding dots, flowers and fruit to map
 			this.map.createFromTiles(7, this.safetile, 'dot', this.layer, this.dots);
-			this.map.createFromTiles(35, this.safetile, 'flower', this.layer, this.dots);
+			this.map.createFromTiles(35, this.safetile, 'flower', this.layer, this.flowers);
+			this.map.createFromTiles(36, this.safetile, 'fruit', this.layer, this.fruit);
 
 			//  The dots will need to be offset by 6px to put them back in the middle of the grid
 			this.dots.setAll('x', 6, false, false, 1);
 			this.dots.setAll('y', 6, false, false, 1);
 
+			//  The flowers will need to be offset by (4, 3)px to put them back in the middle of the grid
+			this.flowers.setAll('x', 4, false, false, 1);
+			this.flowers.setAll('y', 3, false, false, 1);
+
+			//  The fruit will need to be offset by 2px to put them back in the middle of the grid
+			this.fruit.setAll('x', 2, false, false, 1);
+			this.fruit.setAll('y', 2, false, false, 1);
+			
 			//  Pacman should collide with everything except the safe tile
 			this.map.setCollisionByExclusion([this.safetile], true, this.layer);
 
-			/*
-			//  Position Pacman at grid location 14x17 (the +8 accounts for his anchor)
-			this.pacman = this.add.sprite((14 * 16) + 8, (17 * 16) + 8, 'pacman', 0);
-			this.pacman.anchor.set(0.5);
-			this.pacman.animations.add('munch', [0, 1, 2, 1], 10, true);
-
-			this.physics.arcade.enable(this.pacman);
-			this.pacman.body.setSize(16, 16, 0, 0);
-			*/
-			
 			this.positionPacman();
-
-			/*
-			//  Add ghost sprite and enable physics
-			this.ghost = this.add.sprite((3*16) + 8, (17 * 16) + 8, 'ghost', 0);
-			this.ghost.anchor.set(0.5);
-			this.ghost.animations.add('float', [0, 1], 5, true);
-
-			this.physics.arcade.enable(this.ghost);
-			this.ghost.body.setSize(16, 16, 0, 0);
-			*/
-
-			this.positionGhost();
+			this.addGhosts();
 
 			this.cursors = this.input.keyboard.createCursorKeys();
 
-			// Implementing save system, saves high score using localStorage
+			//  Implementing save system, saves high score using localStorage
 			this.scoreValue = 0;
 			this.highscoreValue = 0;
 
@@ -186,13 +230,8 @@
 			this.timerText = this.add.text(225, 420, "", {font: "Bold 16px Times New Roman", fill: "#000000", align: "left"});
 			this.timerText.anchor.setTo(0.5, 0.5);
 
-			this.timeOfCheck = this.time.create(false);
-			this.timeOfCheck.start();
-
 			// Bonus Timer Event
 			game.time.events.add(Phaser.Timer.SECOND * (Math.floor(Math.random()*10)+10), this.createBonus, this);
-
-			
 		},
 
 		checkKeys: function () {
@@ -310,18 +349,28 @@
 		},
 
 		eatDot: function (pacman, dot) {
-
+			var score = 0;
 			dot.kill();
-			//  Update score and play pickup sound effect when dot is eaten
-			this.updateScore(100);
+			
+			//  Determine score depending on key
+			if (dot.key === 'dot'){
+				score = 100;
+			}
+			else if (dot.key === 'flower'){
+				score = 500;
+			}
+
+			//  Update score
+			this.updateScore(score);
+			//  Play pickup sound
 			this.pickup.play();
 
 			if (this.dots.total === 0)
 			{
-				//  There are currently no other ways to lose lives, so one life is lost when all the dots are eaten
-				this.updateLifeCounter(-1);
-
+				//  Revive all physics groups when all dots are eaten
 				this.dots.callAll('revive');
+				this.flowers.callAll('revive');
+				this.fruit.callAll('revive');				
 				//  Update high score save when the stage is complete, this will most likely be implemented in a separate function later on
 				saveObject = {
 					highscoreValue: this.highscoreValue
@@ -334,6 +383,41 @@
 				this.stageTimer.start();
 				game.time.events.add(Phaser.Timer.SECOND * (Math.floor(Math.random()*10)+10), this.createBonus, this);
 			}
+		},
+
+		eatFruit: function (pacman, fruit) {
+			//  Kill overlapping fruit
+			fruit.kill();
+
+			if (this.aggro === 0){
+				this.aggro = 1;
+				this.pacman.tint = 0x444444;
+			} else {
+				//  If player already under effect of fruit, remove the previous event
+				game.time.events.remove(this.timedEvent);
+				this.changeGhostSpeed(2);
+			}
+			this.timedEvent = game.time.events.add(Phaser.Timer.SECOND * this.duration, this.removeAggro, this);
+			this.changeGhostSpeed(0.5);
+		},
+
+		changeGhostSpeed: function(change){
+			this.ghostSpeed *= change;
+			this.ghostGroup.forEach(this.changeGhostGroupVelocity, this, null, change)
+			console.log(this.ghostSpeed);
+		},
+
+		changeGhostGroupVelocity: function(ghost, change) {
+			ghost.body.velocity.x *= change;
+			ghost.body.velocity.y *= change;
+			console.log('vx ' + ghost.body.velocity.x + ' vy ' + ghost.body.velocity.y);
+		},
+
+		removeAggro: function(){
+			//  This function is only used for the 'timedEvent' callback
+			this.aggro = 0;
+			this.pacman.tint = 0xFFFFFF;
+			this.changeGhostSpeed(2);
 		},
 
 		updateScore: function(value) {
@@ -370,20 +454,35 @@
 			this.powerup.play();
 		},
 
-		positionGhost: function() {
+		createGhost: function(direction) {
 			//  Add ghost sprite and enable physics
-			this.ghost = this.add.sprite((13 * 16) + 8, (11 * 16) + 8, 'ghost', 0);
-			this.ghost.anchor.set(0.5);
-			this.ghost.animations.add('float', [0, 1], 5, true);
+			var ghost = this.add.sprite((13 * 16) + 8, (11 * 16) + 8, 'ghost', 0);
+			ghost.anchor.set(0.5);
+			ghost.animations.add('float', [0, 1], 5, true);
 
-			this.physics.arcade.enable(this.ghost);
-			this.ghost.body.setSize(16, 16, 0, 0);
+			this.physics.arcade.enable(ghost);
+			ghost.body.setSize(16, 16, 0, 0);
 
-			this.ghost.play('float');
-			this.moveGhost(Phaser.RIGHT);
+			ghost.marker = new Phaser.Point();
+			ghost.turnPoint = new Phaser.Point();
+			ghost.turning = Phaser.NONE;
+			ghost.directions = [null, null, null, null, null];
+
+			ghost.timeSinceTurn = this.time.create(false);
+			ghost.timeSinceTurn.start();
+
+			ghost.timeSinceTele = this.time.create(false);
+			ghost.timeSinceTele.start();
+
+			
+
+			ghost.play('float');
+			this.moveGhost(ghost, direction);
+			return ghost;
 		},
 
 		positionPacman: function(){
+			//  Position Pacman at grid location 14x17 (the +8 accounts for his anchor)
 			this.pacman = this.add.sprite((14 * 16) + 8, (17 * 16) + 8, 'pacman', 0);
 			this.pacman.anchor.set(0.5);
 			this.pacman.animations.add('munch', [0, 1, 2, 1], 10, true);
@@ -394,34 +493,38 @@
 			this.move(Phaser.LEFT);
 		},
 
+		checkAggro: function(pacman, ghost){
+			if (this.aggro === 0){
+				this.eatPlayer();
+			} else {
+				this.eatGhost(ghost);
+			}
+		},
+
 		update: function () {
 			this.physics.arcade.collide(this.pacman, this.layer);
-			//this.physics.arcade.collide(this.ghost, this.layer);
 
 			this.physics.arcade.overlap(this.pacman, this.dots, this.eatDot, null, this);
+			this.physics.arcade.overlap(this.pacman, this.flowers, this.eatDot, null, this);
+			this.physics.arcade.overlap(this.pacman, this.fruit, this.eatFruit, null, this);
 			//  Calls the eatBonus function if the pacman sprite overlaps with the bonus sprite
 			this.physics.arcade.overlap(this.pacman, this.bonus, this.eatBonus, null, this);
-			this.physics.arcade.overlap(this.pacman, this.ghost, this.eatPlayer, null, this)
+			this.physics.arcade.overlap(this.pacman, this.ghostGroup, this.checkAggro, null, this)
 
+			//  Update player markers
 			this.marker.x = this.math.snapToFloor(Math.floor(this.pacman.x), this.gridsize) / this.gridsize;
 			this.marker.y = this.math.snapToFloor(Math.floor(this.pacman.y), this.gridsize) / this.gridsize;
 
+			//  Update ghost markers
+			this.ghostGroup.forEach(this.updateGhostMarkers, this, null);
+
 			//  Check if player is about to teleport
 			if(this.marker.x < 0 || this.marker.x > 27){
-				console.log(this.pacman.x + ' ' + this.marker.y);
-				this.pacman.x = 448 - this.pacman.x;
+				this.pacman.x = game.width - this.pacman.x;
 			}
-
-			this.ghostMarker.x = this.math.snapToFloor(Math.ceil(this.ghost.x), this.gridsize) / this.gridsize;
-			this.ghostMarker.y = this.math.snapToFloor(Math.ceil(this.ghost.y), this.gridsize) / this.gridsize;
 
 			//  Check if ghost is about to teleport
-			if(this.ghostMarker.x < 0 || this.ghostMarker.x > 27){
-				if ( this.ghostMarker.x < 0) {
-					this.ghost.x = 0;
-				}
-				this.ghost.x = 448 - this.ghost.x;
-			}
+			this.ghostGroup.forEach(this.ghostTeleport, this, null);
 
 			//  Update text
 			this.score.setText(this.scoreValue);
@@ -442,73 +545,81 @@
 				this.turn();
 			}
 
-			this.ghostAI();
+			this.ghostGroup.forEach(this.ghostAI, this, true);
 
 		},
 
-		ghostAI : function () {
-			var openDirs = this.checkGhostDirections();
+		updateGhostMarkers: function(ghost) {
+			ghost.marker.x = this.math.snapToFloor(Math.ceil(ghost.x), this.gridsize) / this.gridsize;
+			ghost.marker.y = this.math.snapToFloor(Math.ceil(ghost.y), this.gridsize) / this.gridsize;
+		},
+
+		ghostTeleport: function(ghost) {
+			
+			if(ghost.marker.x < 0 || ghost.marker.x > 27 && ghost.timeSinceTele.ms > this.delay){
+				if ( ghost.marker.x < 0) {
+					ghost.x = 0;
+				}
+				ghost.x = game.width - ghost.x;
+				ghost.timeSinceTele.destroy();
+				ghost.timeSinceTele = this.time.create(false);
+				ghost.timeSinceTele.start();
+			}
+		},
+
+		ghostAI : function (ghost) {
+			var openDirs = this.checkGhostDirections(ghost);
 			var i=0;
-			var currentDirection = this.ghostAngle();
+			var currentDirection = this.ghostAngle(ghost);
 			var rand;
 			var open_path;
 
-			if (openDirs.length === 2 && (this.ghostDirections[currentDirection].index !== this.safetile)){ // || this.ghostDirections[currentDirection] !== 7 || this.ghostDirections[currentDirection] !== 35 )){
+			if (openDirs.length === 2 && (ghost.directions[currentDirection].index !== this.safetile)){
 				open_path = openDirs[0];
 				if (openDirs[0] === this.opposites[currentDirection]){
 					open_path = openDirs[1];
 				}
-				//console.log(openDirs + '    current direction ' + currentDirection+' turning towards ' + open_path);
-				//console.log('vx ' + this.ghost.body.velocity.x + ' vy ' + this.ghost.body.velocity.y);
-				this.ghostTurning = open_path;
 
-				this.ghostTurnPoint.x = (this.ghostMarker.x * this.gridsize) + (this.gridsize / 2);
-				this.ghostTurnPoint.y = (this.ghostMarker.y * this.gridsize) + (this.gridsize / 2);
-				//console.log('current point: x ' + this.ghost.x + ' y ' + this.ghost.y);
-				//console.log('markerr point: x ' + this.ghostMarker.x + ' y ' + this.ghostMarker.y);
-				//console.log('turning point: x ' + this.ghostTurnPoint.x + ' y ' + this.ghostTurnPoint.y);
-				//this.ghostTurn();
-				//currentDirection = this.ghostAngle();
-				//console.log('dw '+openDirs + '    current direction ' + currentDirection+' turning towards ' + open_path);
-			}else if ((openDirs.length) > 2 && this.timeOfCheck.seconds > 0.5){
-				//console.log(openDirs + '      heading towards ' + currentDirection + '        angle ' + this.ghost.body.angle);
-				//console.log('vx ' + this.ghost.body.velocity.x + ' vy ' + this.ghost.body.velocity.y);
-				//console.log('inside '+ this.timeOfCheck.seconds);
-				//if(this.ghostDirections[currentDirection].index !== this.safetile){
+				ghost.turning = open_path;
+
+				ghost.turnPoint.x = (ghost.marker.x * this.gridsize) + (this.gridsize / 2);
+				ghost.turnPoint.y = (ghost.marker.y * this.gridsize) + (this.gridsize / 2);
+
+			}else if (openDirs.length > 2 && ghost.timeSinceTurn.ms > this.delay){
 				rand = Math.floor(Math.random()*(openDirs.length));
 				open_path = openDirs[rand];
 				while(open_path === this.opposites[currentDirection]){
 					rand = Math.floor(Math.random()*(openDirs.length));
 					open_path = openDirs[rand];
 				}
-				//console.log('choosing direction '+open_path);
-				this.ghostTurning = open_path;
-				this.ghostTurnPoint.x = (this.ghostMarker.x * this.gridsize) + (this.gridsize / 2);
-				this.ghostTurnPoint.y = (this.ghostMarker.y * this.gridsize) + (this.gridsize / 2);
-				//this.ghostTurn();
-				//this.moveGhost(openDirs[rand]);
-				this.timeOfCheck.destroy();
-				this.timeOfCheck = this.time.create(false);
-				this.timeOfCheck.start();
+				ghost.turning = open_path;
+
+				ghost.turnPoint.x = (ghost.marker.x * this.gridsize) + (this.gridsize / 2);
+				ghost.turnPoint.y = (ghost.marker.y * this.gridsize) + (this.gridsize / 2);
+
+				ghost.timeSinceTurn.destroy();
+				ghost.timeSinceTurn = this.time.create(false);
+				ghost.timeSinceTurn.start();
 			}else{
-				this.ghostTurning = Phaser.NONE;
+				ghost.turning = Phaser.NONE;
 			}
-			if (this.ghostTurning !== Phaser.NONE && this.ghostTurning !== currentDirection){
-				this.ghostTurn();
+			if (ghost.turning !== Phaser.NONE && ghost.turning !== currentDirection){
+				this.ghostTurn(ghost);
 			}
 		},
 
-		checkGhostDirections : function() {
+		checkGhostDirections: function(ghost) {
 			var i;
 			var openDirs = [];
-			this.ghostDirections[1] = this.map.getTileLeft(this.layer.index, this.ghostMarker.x, this.ghostMarker.y);
-			this.ghostDirections[2] = this.map.getTileRight(this.layer.index, this.ghostMarker.x, this.ghostMarker.y);
-			this.ghostDirections[3] = this.map.getTileAbove(this.layer.index, this.ghostMarker.x, this.ghostMarker.y);
-			this.ghostDirections[4] = this.map.getTileBelow(this.layer.index, this.ghostMarker.x, this.ghostMarker.y);
+			ghost.directions[1] = this.map.getTileLeft(this.layer.index, ghost.marker.x, ghost.marker.y);
+			ghost.directions[2] = this.map.getTileRight(this.layer.index, ghost.marker.x, ghost.marker.y);
+			ghost.directions[3] = this.map.getTileAbove(this.layer.index, ghost.marker.x, ghost.marker.y);
+			ghost.directions[4] = this.map.getTileBelow(this.layer.index, ghost.marker.x, ghost.marker.y);
+			
 			for(i=1; i<=4; i++){
-				//console.log('ghost directions ' + this.ghostDirections[i]);
-				if(this.ghostMarker.x > 0 && this.ghostMarker.x < 27){
-					if(this.ghostDirections[i].index === this.safetile){
+				//console.log(ghost.directions[i].index)
+				if(ghost.marker.x > 0 && ghost.marker.x < 27){
+					if(ghost.directions[i].index === this.safetile){
 						openDirs.push(i);
 					}
 				}
@@ -517,118 +628,119 @@
 			return openDirs;
 		},
 
-		ghostAngle : function() {
-			if (this.ghost.angle === 0 && this.ghost.scale.x === -1){
+		ghostAngle: function(ghost) {
+			if (ghost.angle === 0 && ghost.scale.x === -1){
 				return 1;
-			}else if(this.ghost.angle === 0 && this.ghost.scale.x === 1){
+			}else if(ghost.angle === 0 && ghost.scale.x === 1){
 				return 2;
-			}else if (this.ghost.angle === -90){//this.math.fuzzyEqual(this.ghost.body.angle, Math.PI/2, 0.0001)){
+			}else if (ghost.angle === -90){
 				return 3;
-			}else if (this.ghost.angle === 90){//this.math.fuzzyEqual(this.ghost.body.angle, -Math.PI/2, 0.0001)){
+			}else if (ghost.angle === 90){
 				return 4;
 			}
-			//console.log('crashing! angle ' + this.ghost.angle + ' body angle ' + this.ghost.body.angle + ' scale ' + this.ghost.scale.x);
 		},
 
-		moveGhost: function (direction) {
+		moveGhost: function (ghost, direction) {
 
-			var speed = this.speed;
+			var speed = this.ghostSpeed;
 
 			if (direction === 1 || direction === 3)
 			{
-				//console.log('speed = -speed');
 				speed = -speed;
 			}
 
 			if (direction === 1 || direction === 2)
 			{
-				//console.log('vx = speed vy = 0');
-				this.ghost.body.velocity.x = speed;
-				this.ghost.body.velocity.y = 0;
+				ghost.body.velocity.x = speed;
+				ghost.body.velocity.y = 0;
 			}
 			else
 			{
-				//console.log('vx = 0 vy = speed');
-				this.ghost.body.velocity.x = 0;
-				this.ghost.body.velocity.y = speed;
+				ghost.body.velocity.x = 0;
+				ghost.body.velocity.y = speed;
 			}
 
-			//  Reset the scale and angle (Pacman is facing to the right in the sprite sheet)
-			this.ghost.scale.x = 1;
-			this.ghost.angle = 0;
+			ghost.scale.x = 1;
+			ghost.angle = 0;
 
 			if (direction === 1)
 			{
-				this.ghost.scale.x = -1;
+				ghost.scale.x = -1;
 			}
 			else if (direction === 3)
 			{
-				this.ghost.angle = 270;
+				ghost.angle = 270;
 			}
 			else if (direction === 4)
 			{
-				this.ghost.angle = 90;
+				ghost.angle = 90;
 			}
-			//console.log('angle changed to ' + this.ghost.angle + ' body angle ' + this.ghost.body.angle);
 
 		},
 
-		ghostTurn: function () {
+		ghostTurn: function (ghost) {
 
-			var cx = Math.floor(this.ghost.x);
-			var cy = Math.floor(this.ghost.y);
+			var cx = Math.floor(ghost.x);
+			var cy = Math.floor(ghost.y);
 
 			//  This needs a threshold, because at high speeds you can't turn because the coordinates skip past
-			if (!this.math.fuzzyEqual(cx, this.ghostTurnPoint.x, 10) || !this.math.fuzzyEqual(cy, this.ghostTurnPoint.y, 10))
+			if (!this.math.fuzzyEqual(cx, ghost.turnPoint.x, 10) || !this.math.fuzzyEqual(cy, ghost.turnPoint.y, 10))
 			{
-				//console.log('printing false');
 				return false;
 			}
 
 			//  Grid align before turning
-			this.ghost.x = this.ghostTurnPoint.x;
-			this.ghost.y = this.ghostTurnPoint.y;
+			ghost.x = ghost.turnPoint.x;
+			ghost.y = ghost.turnPoint.y;
 
-			//console.log('new point: x ' + this.ghost.x + ' y ' + this.ghost.y);
 
-			this.ghost.body.reset(this.ghostTurnPoint.x, this.ghostTurnPoint.y);
+			ghost.body.reset(ghost.turnPoint.x, ghost.turnPoint.y);
 
-			this.moveGhost(this.ghostTurning);
+			this.moveGhost(ghost, ghost.turning);
 
-			this.ghostTurning = Phaser.NONE;
+			ghost.turning = Phaser.NONE;
 
 			return true;
 
 		},
 
 		eatPlayer: function() {
-			var tempTimer = this.time.create(false);
-			tempTimer.start();
-			//  Pause for 2 seconds
-			//this.stageTimer.pause();
-			//this.destroyGhost();
-			//this.pacman.tint = 0x000000;
 			this.updateLifeCounter(-1);
-			//this.pacman.body.velocity = 0;
-			//this.pacman.body.velocity = 0;
 			if (this.lifeCounter > 0){
-				console.log('Inside ' +  this.lifeCounter);
-				//this.stageTimer.resume();
-				this.destroyGhost();
-				this.positionGhost();
+				this.ghostGroup.destroy();
+				this.addGhosts();
 				this.pacman.destroy();
 				this.positionPacman();
 				this.move(Phaser.LEFT);
 			}
 		},
 
-		destroyGhost: function() {
-			this.ghost.destroy();
+		eatGhost: function(ghost) {
+			this.destroyGhost(ghost);
+			this.updateScore(1000);
+			this.ghostGroup.add(this.createGhost(this.randomDirection()));
+		},
+
+		destroyGhost: function(ghost) {
+			ghost.destroy();
+		},
+
+		addGhosts: function() {
+			this.ghostGroup = this.add.group();
+			this.ghostGroup.add(this.createGhost(this.randomDirection()));
+			this.ghostGroup.add(this.createGhost(this.randomDirection()));
+			this.ghostGroup.add(this.createGhost(this.randomDirection()));
+			this.ghostGroup.add(this.createGhost(this.randomDirection()));
+		},
+
+		randomDirection: function() {
+			return Math.round(Math.random())+1;
 		}
 
 	};
 
-	game.state.add('Game', Pacman, true);
+	game.state.add('Game', Pacman, false);
+	game.state.add('Menu', Menu, true);
 
 	</script>
 
