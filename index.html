@@ -1,748 +1,1158 @@
 <!DOCTYPE HTML>
 <html>
+
 <head>
 	<title>Pacman</title>
 	<meta charset="utf-8">
 	<style>
-	body {
-		margin: 0;
-		padding: 0;
-		background-color: #000000;
-	}
+		body {
+			margin: 0;
+			padding: 0;
+			background-color: #000000;
+		}
 	</style>
 
 	<script src="//cdn.jsdelivr.net/phaser/2.2.2/phaser.min.js"></script>
 </head>
+
 <body>
 
 	<script type="text/javascript">
-	// #216723
-	var game = new Phaser.Game(448, 496, Phaser.AUTO);
+		// #216723
+		var game = new Phaser.Game(448, 496, Phaser.AUTO);
 
-	var Menu = function (game) {
-		this.map = null;
-		this.layer = null;
-	}
-
-	Menu.prototype = {
-		init: function(){
-			this.scale.scaleMode = Phaser.ScaleManager.SHOW_ALL;
-			this.scale.pageAlignHorizontally = true;
-			this.scale.pageAlignVertically = true;
-
-			Phaser.Canvas.setImageRenderingCrisp(this.game.canvas);
-		},
-
-		preload: function() {
-			this.load.image('stage1', 'assets/stage1.png');
-			this.load.image('play', 'assets/play.png');
-			this.load.image('left_arrow', 'assets/arrow_left.png');
-			this.load.image('right_arrow', 'assets/arrow_right.png');
-			this.load.image('logo', 'assets/logo.png');
-		},
-
-		create: function() {
-			this.stage = game.add.sprite(0, 0, 'stage1');
-
-			this.logo = game.add.sprite(game.world.centerX, game.height * 0.1, 'logo');
-			this.logo.anchor.set(0.5);
-
-			this.p = game.add.sprite(game.world.centerX * 1.05, game.world.centerY, 'play');
-			this.p.anchor.set(0.5, 0.5);
-			this.p.inputEnabled = true;
-			
-			this.left = game.add.sprite(game.width * 0.10, game.world.centerY, 'left_arrow');
-			this.left.anchor.set(0.5);
-			
-			this.right = game.add.sprite(game.width * 0.90, game.world.centerY, 'right_arrow');
-			this.right.anchor.set(0.5);
-			
-
-			this.p.events.onInputDown.add(this.listener, this);
-			
-		},
-
-		listener: function() {
-			game.state.start('Game');
-		},
-
-		update: function() {
+		var Menu = function (game) {
+			this.map = null;
+			this.layer = null;
 		}
-	};
 
-	var Pacman = function (game) {
-		this.map = null;
-		this.layer = null;
-		this.pacman = null;
+		Menu.prototype = {
+			init: function () {
+				this.scale.scaleMode = Phaser.ScaleManager.SHOW_ALL;
+				this.scale.pageAlignHorizontally = true;
+				this.scale.pageAlignVertically = true;
 
-		this.safetile = 14;
-		this.gridsize = 16;
+				Phaser.Canvas.setImageRenderingCrisp(this.game.canvas);
+			},
 
-		this.speed = 100;
-		this.ghostSpeed = 100;
-		this.threshold = 2;
+			preload: function () {
+				//  We need this because the assets are on github pages
+				//  Remove the next 2 lines if running locally
+				this.load.baseURL = 'https://p15zerv.github.io/pacman/';
+				this.load.crossOrigin = 'anonymous';
+				
+				this.load.image('stage1', 'assets/stage1.png');
+				this.load.image('stage2', 'assets/stage2.png');
+				this.load.image('play', 'assets/play.png');
+				this.load.image('left_arrow', 'assets/arrow_left.png');
+				this.load.image('right_arrow', 'assets/arrow_right.png');
+				this.load.image('logo', 'assets/logo.png');
+				this.load.audio('menu', 'audio/menu_dark.mp3');
+				this.load.audio('click', 'audio/menu_click.wav');
+				this.load.image('moon', 'assets/moon_button2.png');
+				this.load.image('circle', 'assets/circle.png');
+			},
 
-		this.aggro = 0;
+			create: function () {
+				this.stageThumbs = ['stage1', 'stage2'];
+				this.backgroundLayer = this.add.group();
+				this.circleLayer = this.add.group();
+				this.menuLayer = this.add.group();
 
-		this.marker = new Phaser.Point();
+				this.stageNum = 0;
+				this.numOfStages = 2;
+				this.menuMusic = this.add.audio('menu', 1, true);
+				this.menuMusic.play();
 
-		this.turnPoint = new Phaser.Point();
+				this.click = this.add.audio('click', 1, false);
 
-		this.directions = [ null, null, null, null, null ];
-		this.opposites = [ Phaser.NONE, Phaser.RIGHT, Phaser.LEFT, Phaser.DOWN, Phaser.UP ];
+				this.loadThumbnail();
 
-		this.current = Phaser.NONE;
-		this.turning = Phaser.NONE;
+				this.logo = this.menuLayer.create(game.world.centerX, game.height * 0.1, 'logo');
+				this.logo.anchor.set(0.5);
 
-		this.delay = 250;
-		this.duration = 7.5;
+				this.p = this.menuLayer.create(game.world.centerX * 1.05, game.world.centerY, 'play');
+				this.p.anchor.set(0.5);
+				this.p.inputEnabled = true;
 
-	};
+				this.left = this.menuLayer.create(game.width * 0.10, game.world.centerY, 'left_arrow');
+				this.left.anchor.set(0.5);
+				this.left.inputEnabled = true;
 
-	Pacman.prototype = {
+				this.right = this.menuLayer.create(game.width * 0.90, game.world.centerY, 'right_arrow');
+				this.right.anchor.set(0.5);
+				this.right.inputEnabled = true;
 
-		init: function () {
+				this.moon = this.menuLayer.create(game.width * 0.5, game.height * 0.95, 'moon');
+				this.moon.anchor.set(0.5);
+				this.nightMode = false;
+				this.moon.inputEnabled = true;
 
-			this.scale.scaleMode = Phaser.ScaleManager.SHOW_ALL;
-			this.scale.pageAlignHorizontally = true;
-			this.scale.pageAlignVertically = true;
+				this.p.events.onInputDown.add(this.listener, this);
+				this.moon.events.onInputDown.add(this.changeMode, this);
+				this.left.events.onInputDown.add(this.previousStage, this);
+				this.right.events.onInputDown.add(this.nextStage, this);
 
-			Phaser.Canvas.setImageRenderingCrisp(this.game.canvas);
+				/*
+				this.currentMode = this.add.text(120, 480, "Mode:", { font: "Bold 16px Times New Roman", fill: "#ffffffff", align: "left" });
+				this.currentMode.anchor.setTo(0.5, 0.5);
 
-			this.physics.startSystem(Phaser.Physics.ARCADE);
+				this.currentModeText = this.add.text(160, 480, "", { font: "Bold 16px Times New Roman", fill: "#ffffffff", align: "left" });
+				this.currentModeText.anchor.setTo(0.5, 0.5);
 
-		},
+				this.currentStageText = this.add.text(160, 460, "", { font: "Bold 16px Times New Roman", fill: "#ffffffff", align: "left" });
+				this.currentStageText.anchor.setTo(0.5, 0.5);
+				*/
+			},
 
-		preload: function () {
+			loadThumbnail: function () {
+				var stageNum = 'stage' + String(this.stageNum + 1);
+				this.stage = this.backgroundLayer.create(0, 0, stageNum);
+			},
 
-			//  We need this because the assets are on github pages
-			//  Remove the next 2 lines if running locally
-			this.load.baseURL = 'https://p15zerv.github.io/pacman/';
-			this.load.crossOrigin = 'anonymous';
+			changeMode: function () {
+				this.click.play();
+				this.nightMode = !this.nightMode;
+				this.toggleCircle();
+			},
+
+			toggleCircle: function () {
+				if (this.nightMode) {
+					this.circle = this.circleLayer.create(game.world.centerX, game.world.centerY, 'circle');
+					this.circle.anchor.set(0.5);
+				} else {
+					this.circle.destroy();
+				}
+			},
+
+			listener: function () {
+				this.click.play();
+				this.menuMusic.destroy();
+				game.state.start('Game', true, false, this.stageNum, this.nightMode);
+			},
 
 
-			//  Original Assets
-			//this.load.image('dot', 'assets/dot.png');
-			//this.load.image('tiles', 'assets/pacman-tiles.png');
-			//this.load.spritesheet('pacman', 'assets/pacman.png', 32, 32);
-			//this.load.tilemap('map', 'assets/pacman-map.json', null, Phaser.Tilemap.TILED_JSON);
+			previousStage: function () {
+				this.click.play();
+				this.stageNum += 1;
+				if (this.stageNum > this.numOfStages - 1) {
+					this.stageNum = 0;
+				}
+				this.loadThumbnail();
+			},
 
-			//  Loading new assets
-			this.load.image('dot', 'assets/dot.png');
-			this.load.image('flower', 'assets/flower.png');
-			this.load.image('tiles', 'assets/red-tiles.png');
-			this.load.image('basket', 'assets/basket.png');
-			this.load.image('fruit', 'assets/fruit.png');
-			this.load.spritesheet('pacman', 'assets/red2.png', 32, 32);
-			this.load.tilemap('map', 'assets/my-map.json', null, Phaser.Tilemap.TILED_JSON);
+			nextStage: function () {
+				this.click.play();
+				this.stageNum -= 1;
+				if (this.stageNum < 0) {
+					this.stageNum = this.numOfStages - 1;
+				}
+				this.loadThumbnail();
+			},
 
-			this.load.spritesheet('ghost', 'assets/ghost.png', 32, 32);
+			update: function () {
+				//this.currentModeText.setText(String(this.nightMode));
+				//this.currentStageText.setText(String(this.stageNum));
 
-			//  Loading audio files
-			this.load.audio('music', 'audio/music.mp3');
-			this.load.audio('pickup', 'audio/pickup.wav');
-			this.load.audio('powerup', 'audio/powerup.wav');
-			//  Red riding hood sprite by Slim: https://slimsresources.wordpress.com/
-			//  Flower sprite from: https://kandipatterns.com/patterns/misc/flower-20789
-			//  Audio effects from: https://freesound.org/people/LittleRobotSoundFactory/packs/16681/
-			//  Needless to say, graphics (C)opyright Namco
-
-		},
-
-		create: function () {
-			//  Adding sound effects and music
-			this.music = this.game.add.audio('music', 1, true);
-			this.pickup = this.game.add.audio('pickup');
-			this.powerup = this.game.add.audio('powerup');
-
-			//  Playing music
-			this.music.play();
-
-			this.map = this.add.tilemap('map');
-			this.map.addTilesetImage('red-tiles.png', 'tiles');
-
-			this.layer = this.map.createLayer('Pacman');
-
-			this.dots = this.add.physicsGroup();
-			this.flowers = this.add.physicsGroup();
-			this.fruit = this.add.physicsGroup();
-
-			//  Adding dots, flowers and fruit to map
-			this.map.createFromTiles(7, this.safetile, 'dot', this.layer, this.dots);
-			this.map.createFromTiles(35, this.safetile, 'flower', this.layer, this.flowers);
-			this.map.createFromTiles(36, this.safetile, 'fruit', this.layer, this.fruit);
-
-			//  The dots will need to be offset by 6px to put them back in the middle of the grid
-			this.dots.setAll('x', 6, false, false, 1);
-			this.dots.setAll('y', 6, false, false, 1);
-
-			//  The flowers will need to be offset by (4, 3)px to put them back in the middle of the grid
-			this.flowers.setAll('x', 4, false, false, 1);
-			this.flowers.setAll('y', 3, false, false, 1);
-
-			//  The fruit will need to be offset by 2px to put them back in the middle of the grid
-			this.fruit.setAll('x', 2, false, false, 1);
-			this.fruit.setAll('y', 2, false, false, 1);
-			
-			//  Pacman should collide with everything except the safe tile
-			this.map.setCollisionByExclusion([this.safetile], true, this.layer);
-
-			this.positionPacman();
-			this.addGhosts();
-
-			this.cursors = this.input.keyboard.createCursorKeys();
-
-			//  Implementing save system, saves high score using localStorage
-			this.scoreValue = 0;
-			this.highscoreValue = 0;
-
-			this.loadObject = localStorage.getItem("save");
-			if (this.loadObject){
-				this.loadObject = JSON.parse(this.loadObject);
-				this.highscoreValue = this.loadObject.highscoreValue;
 			}
+		};
 
-			//  Adding text
-			this.scoreText = this.add.text(150, 30, "SCORE", {font: "Bold 16px Times New Roman", fill: "#000000", align: "left"});
-			this.scoreText.anchor.setTo(0.5, 0.5);
+		var Pacman = function (game) {
+			this.map = null;
+			this.layer = null;
+			this.pacman = null;
 
-			this.score = this.add.text(150, 50, "", {font: "Bold 16px Times New Roman", fill: "#000000", align: "left"});
-			this.score.anchor.setTo(0.5, 0.5);
+			this.safetile = 14;
+			this.gridsize = 16;
 
-			this.highscoreText = this.add.text(285, 30, "HIGH SCORE", {font: "Bold 16px Times New Roman", fill: "#000000", align: "center"});
-			this.highscoreText.anchor.setTo(0.5, 0.5);
+			this.speed = 100;
+			this.ghostSpeed = 100;
+			this.threshold = 2;
 
-			this.highscore = this.add.text(285, 50, "", {font: "Bold 16px Times New Roman", fill: "#000000", align: "left"});
-			this.highscore.anchor.setTo(0.5, 0.5);
+			this.aggro = 0;
 
-			//  Life system
-			this.lifeCounter = 3;
+			this.marker = new Phaser.Point();
 
-			this.life = this.add.text(225, 450, "LIVES", {font: "Bold 16px Times New Roman", fill: "#000000", align: "left"});
-			this.life.anchor.setTo(0.5, 0.5);
+			this.turnPoint = new Phaser.Point();
 
-			this.lifeText =	 this.add.text(225, 470, "", {font: "Bolt 16px Times New Roman", fill: "#000000", align: "left"});
-			this.lifeText.anchor.setTo(0.5, 0.5);
+			this.directions = [null, null, null, null, null];
+			this.opposites = [Phaser.NONE, Phaser.RIGHT, Phaser.LEFT, Phaser.DOWN, Phaser.UP];
 
-			//  Stage Timer
-			this.stageTimer = this.time.create(false);
-			this.stageTimer.start();
-			this.timerText = this.add.text(225, 420, "", {font: "Bold 16px Times New Roman", fill: "#000000", align: "left"});
-			this.timerText.anchor.setTo(0.5, 0.5);
-
-			// Bonus Timer Event
-			game.time.events.add(Phaser.Timer.SECOND * (Math.floor(Math.random()*10)+10), this.createBonus, this);
-		},
-
-		checkKeys: function () {
-
-			if (this.cursors.left.isDown && this.current !== Phaser.LEFT)
-			{
-				this.checkDirection(Phaser.LEFT);
-			}
-			else if (this.cursors.right.isDown && this.current !== Phaser.RIGHT)
-			{
-				this.checkDirection(Phaser.RIGHT);
-			}
-			else if (this.cursors.up.isDown && this.current !== Phaser.UP)
-			{
-				this.checkDirection(Phaser.UP);
-			}
-			else if (this.cursors.down.isDown && this.current !== Phaser.DOWN)
-			{
-				this.checkDirection(Phaser.DOWN);
-			}
-			else
-			{
-				//  This forces them to hold the key down to turn the corner
-				this.turning = Phaser.NONE;
-			}
-
-		},
-
-		checkDirection: function (turnTo) {
-
-			if (this.turning === turnTo || this.directions[turnTo] === null || this.directions[turnTo].index !== this.safetile)
-			{
-				//  Invalid direction if they're already set to turn that way
-				//  Or there is no tile there, or the tile isn't index 1 (a floor tile)
-				return;
-			}
-
-			//	Check if they want to turn around and can
-			if (this.current === this.opposites[turnTo])
-			{
-				this.move(turnTo);
-			}
-			else
-			{
-				this.turning = turnTo;
-
-				this.turnPoint.x = (this.marker.x * this.gridsize) + (this.gridsize / 2);
-				this.turnPoint.y = (this.marker.y * this.gridsize) + (this.gridsize / 2);
-			}
-
-		},
-
-		turn: function () {
-
-			var cx = Math.floor(this.pacman.x);
-			var cy = Math.floor(this.pacman.y);
-
-			//  This needs a threshold, because at high speeds you can't turn because the coordinates skip past
-			if (!this.math.fuzzyEqual(cx, this.turnPoint.x, this.threshold) || !this.math.fuzzyEqual(cy, this.turnPoint.y, this.threshold))
-			{
-				return false;
-			}
-
-			//  Grid align before turning
-			this.pacman.x = this.turnPoint.x;
-			this.pacman.y = this.turnPoint.y;
-
-			this.pacman.body.reset(this.turnPoint.x, this.turnPoint.y);
-
-			this.move(this.turning);
-
+			this.current = Phaser.NONE;
 			this.turning = Phaser.NONE;
 
-			return true;
+			this.delay = 250;
+			this.duration = 7.5;
 
-		},
+		};
 
-		move: function (direction) {
+		Pacman.prototype = {
 
-			var speed = this.speed;
+			init: function (stageNum, nightMode) {
+				this.scale.scaleMode = Phaser.ScaleManager.SHOW_ALL;
+				this.scale.pageAlignHorizontally = true;
+				this.scale.pageAlignVertically = true;
 
-			if (direction === Phaser.LEFT || direction === Phaser.UP)
-			{
-				speed = -speed;
-			}
+				Phaser.Canvas.setImageRenderingCrisp(this.game.canvas);
 
-			if (direction === Phaser.LEFT || direction === Phaser.RIGHT)
-			{
-				this.pacman.body.velocity.x = speed;
-			}
-			else
-			{
-				this.pacman.body.velocity.y = speed;
-			}
+				this.physics.startSystem(Phaser.Physics.ARCADE);
 
-			//  Reset the scale and angle (Pacman is facing to the right in the sprite sheet)
-			this.pacman.scale.x = 1;
-			this.pacman.angle = 0;
+				this.stageNum = stageNum;
+				this.nightMode = nightMode;
 
-			if (direction === Phaser.LEFT)
-			{
-				this.pacman.scale.x = -1;
-			}
-			else if (direction === Phaser.UP)
-			{
-				this.pacman.angle = 270;
-			}
-			else if (direction === Phaser.DOWN)
-			{
-				this.pacman.angle = 90;
-			}
+			},
 
-			this.current = direction;
+			preload: function () {
 
-		},
+				//  We need this because the assets are on github pages
+				//  Remove the next 2 lines if running locally
+				this.load.baseURL = 'https://p15zerv.github.io/pacman/';
+				this.load.crossOrigin = 'anonymous';
 
-		eatDot: function (pacman, dot) {
-			var score = 0;
-			dot.kill();
-			
-			//  Determine score depending on key
-			if (dot.key === 'dot'){
-				score = 100;
-			}
-			else if (dot.key === 'flower'){
-				score = 500;
-			}
 
-			//  Update score
-			this.updateScore(score);
-			//  Play pickup sound
-			this.pickup.play();
+				//  Original Assets
+				//this.load.image('dot', 'assets/dot.png');
+				//this.load.image('tiles', 'assets/pacman-tiles.png');
+				//this.load.spritesheet('pacman', 'assets/pacman.png', 32, 32);
+				//this.load.tilemap('map', 'assets/pacman-map.json', null, Phaser.Tilemap.TILED_JSON);
 
-			if (this.dots.total === 0)
-			{
-				//  Revive all physics groups when all dots are eaten
-				this.dots.callAll('revive');
-				this.flowers.callAll('revive');
-				this.fruit.callAll('revive');				
-				//  Update high score save when the stage is complete, this will most likely be implemented in a separate function later on
+				//  Loading new assets
+				this.load.image('dot', 'assets/dot.png');
+				this.load.image('flower', 'assets/flower.png');
+				this.load.image('tiles', 'assets/red-tiles.png');
+				this.load.image('basket', 'assets/basket.png');
+				this.load.image('fruit', 'assets/fruit.png');
+				this.load.spritesheet('pacman', 'assets/red.png', 32, 32);
+
+				this.load.spritesheet('ghost', 'assets/wolf.png', 32, 32);
+				this.load.image('circle', 'assets/circle.png');
+				this.load.spritesheet('blood', 'assets/blood.png', 32, 32);
+				this.load.image('rock', 'assets/rock.png');
+
+				var stagePath = 'assets/stage' + String(this.stageNum + 1) + '.json';
+				this.load.tilemap('map', stagePath, null, Phaser.Tilemap.TILED_JSON);
+
+				//  Loading audio files
+				if (!this.nightMode) {
+					this.load.audio('music', 'audio/music.mp3');
+				} else {
+					this.load.audio('music', 'audio/music2.mp3');
+				}
+				this.load.audio('pickup', 'audio/pickup.wav');
+				this.load.audio('bonusPickup', 'audio/bonusPickup.wav');
+				this.load.audio('powerup', 'audio/powerup.wav');
+				this.load.audio('growl', 'audio/growl.wav');
+				this.load.audio('howl', 'audio/howl.wav');
+				this.load.audio('hit', 'audio/hit.wav');
+				this.load.audio('thud', 'audio/thud.wav');
+				this.load.audio('victory', 'audio/victory.wav');
+				this.load.audio('rockPickup', 'audio/rockPickup.wav');
+				//  Red riding hood sprite by Slim: https://slimsresources.wordpress.com/
+				//  Flower sprite from: https://kandipatterns.com/patterns/misc/flower-20789
+				//  Audio effects from: https://freesound.org/people/LittleRobotSoundFactory/packs/16681/
+				//  Needless to say, graphics (C)opyright Namco
+
+			},
+
+			create: function () {
+
+				//  Adding sound effects and music
+				this.music = this.add.audio('music', 1, true);
+				this.pickup = this.add.audio('pickup', 0.20, false);
+				this.bonusPickup = this.add.audio('bonusPickup', 0.5, false);
+				this.powerup = this.add.audio('powerup', 0.5, false);
+				this.growl = this.add.audio('growl', 1, false);
+				this.howl = this.add.audio('howl', 1, false);
+				this.hit = this.add.audio('hit', 0.5, false);
+				this.thud = this.add.audio('thud', 0.5, false);
+				this.victory = this.add.audio('victory', 1, false);
+				this.rockPickup = this.add.audio('rockPickup', 0.5, false);
+
+				//  Playing music
+				this.music.play();
+
+				this.map = this.add.tilemap('map');
+				this.map.addTilesetImage('red-tiles.png', 'tiles');
+
+				this.layer = this.map.createLayer('Pacman');
+
+				this.dots = this.add.physicsGroup();
+				this.flowers = this.add.physicsGroup();
+				this.fruit = this.add.physicsGroup();
+
+				//  Adding dots, flowers and fruit to map
+				this.map.createFromTiles(7, this.safetile, 'dot', this.layer, this.dots);
+				this.map.createFromTiles(35, this.safetile, 'flower', this.layer, this.flowers);
+				this.map.createFromTiles(36, this.safetile, 'fruit', this.layer, this.fruit);
+
+				this.rockSpawnX = null;
+				this.rockSpawnY = null;
+				this.createRock();
+
+				//  The dots will need to be offset by 6px to put them back in the middle of the grid
+				this.dots.setAll('x', 6, false, false, 1);
+				this.dots.setAll('y', 6, false, false, 1);
+
+				//  The flowers will need to be offset by (4, 3)px to put them back in the middle of the grid
+				this.flowers.setAll('x', 4, false, false, 1);
+				this.flowers.setAll('y', 3, false, false, 1);
+
+				//  The fruit will need to be offset by 2px to put them back in the middle of the grid
+				this.fruit.setAll('x', 2, false, false, 1);
+				this.fruit.setAll('y', 2, false, false, 1);
+
+				//  Pacman should collide with everything except the safe tile
+				this.map.setCollisionByExclusion([this.safetile, 35, 36, 37, 38, 39, 40], true, this.layer);
+
+				//  Initialize score
+				this.scoreValue = 0;
+				this.highscoreValue = 0;
+
+				//  Try to load high score from save
+				this.loadObject = localStorage.getItem("save");
+				if (this.loadObject) {
+					this.loadObject = JSON.parse(this.loadObject);
+					this.highscoreValue = this.loadObject.highscoreValue;
+				}
+
+				this.bonusIsActive = false;
+				this.currentCircleScale = 1.0;
+
+				//  Initialize life counter
+				this.lifeCounter = 3;
+
+				//  Stage timer
+				this.stageTimer = this.time.create(false);
+				this.stageTimer.start();
+
+				this.addText();
+
+				this.pacmanSpawnX = null;
+				this.pacmanSpawnY = null;
+				this.positionPacman();
+
+				console.log(String(this.nightMode));
+				//  Add dark circle
+				if (this.nightMode) {
+					this.circle = this.add.sprite(this.pacman.body.x, this.pacman.body.y, 'circle', 0)
+					this.circle.anchor.set(0.5)
+				}
+
+				this.ghostSpawnX = null;
+				this.ghostSpawnY = null;
+				this.addGhosts();
+				this.respawnCounter = 0;
+				this.respawns = [null, null, null, null];
+
+				this.cursors = this.input.keyboard.createCursorKeys();
+				this.spaceKey = this.input.keyboard.addKey(Phaser.Keyboard.SPACEBAR);
+
+				// Bonus Timer Event
+				this.bonusSpawnX = 0;
+				this.bonusSpawnY = 0;
+				this.locateBonusSpawn();
+				console.log('bonus index ' + this.map.getTileWorldXY(this.bonusSpawnX, this.bonusSpawnY).index);
+				this.bonusDuration = 10.0;
+				this.time.events.add(Phaser.Timer.SECOND * (Math.floor(Math.random() * 10) + 10), this.createBonus, this);
+			},
+
+			addText: function () {
+				this.scoreText = this.add.text(150, 30, "SCORE", { font: "Bold 16px Times New Roman", fill: "#ffffffff", align: "left" });
+				this.scoreText.anchor.setTo(0.5, 0.5);
+
+				this.score = this.add.text(150, 50, "", { font: "Bold 16px Times New Roman", fill: "#ffffffff", align: "left" });
+				this.score.anchor.setTo(0.5, 0.5);
+
+				this.highscoreText = this.add.text(285, 30, "HIGH SCORE", { font: "Bold 16px Times New Roman", fill: "#ffffffff", align: "center" });
+				this.highscoreText.anchor.setTo(0.5, 0.5);
+
+				this.highscore = this.add.text(285, 50, "", { font: "Bold 16px Times New Roman", fill: "#ffffffff", align: "left" });
+				this.highscore.anchor.setTo(0.5, 0.5);
+
+				this.life = this.add.text(225, 460, "LIVES", { font: "Bold 16px Times New Roman", fill: "#ffffffff", align: "left" });
+				this.life.anchor.setTo(0.5, 0.5);
+
+				this.lifeText = this.add.text(225, 480, "", { font: "Bolt 16px Times New Roman", fill: "#ffffffff", align: "left" });
+				this.lifeText.anchor.setTo(0.5, 0.5);
+
+				this.timerText = this.add.text(225, 430, "", { font: "Bold 16px Times New Roman", fill: "#ffffffff", align: "left" });
+				this.timerText.anchor.setTo(0.5, 0.5);
+			},
+
+			destroyText: function () {
+				this.scoreText.destroy();
+				this.score.destroy();
+				this.highscoreText.destroy();
+				this.highscore.destroy();
+				this.life.destroy();
+				this.lifeText.destroy();
+				this.timerText.destroy();
+			},
+
+			checkKeys: function () {
+
+				if (this.cursors.left.isDown && this.current !== Phaser.LEFT) {
+					this.checkDirection(Phaser.LEFT);
+				}
+				else if (this.cursors.right.isDown && this.current !== Phaser.RIGHT) {
+					this.checkDirection(Phaser.RIGHT);
+				}
+				else if (this.cursors.up.isDown && this.current !== Phaser.UP) {
+					this.checkDirection(Phaser.UP);
+				}
+				else if (this.cursors.down.isDown && this.current !== Phaser.DOWN) {
+					this.checkDirection(Phaser.DOWN);
+				}
+				else {
+					//  This forces them to hold the key down to turn the corner
+					this.turning = Phaser.NONE;
+				}
+
+				if (this.spaceKey.isDown) {
+					this.throwRock();
+				}
+
+			},
+
+			checkDirection: function (turnTo) {
+				//  Awful exception handling, used when player tries to teleport so this.directions[turnTo] is undefined.
+				try {
+					if (this.turning === turnTo || this.directions[turnTo] === null || this.directions[turnTo].index !== this.safetile) {
+						//  Invalid direction if they're already set to turn that way
+						//  Or there is no tile there, or the tile isn't index 1 (a floor tile)
+						return;
+					}
+
+					//	Check if they want to turn around and can
+					if (this.current === this.opposites[turnTo]) {
+						this.move(turnTo);
+					}
+					else {
+						this.turning = turnTo;
+
+						this.turnPoint.x = (this.marker.x * this.gridsize) + (this.gridsize / 2);
+						this.turnPoint.y = (this.marker.y * this.gridsize) + (this.gridsize / 2);
+					}
+				} catch (err) {
+					console.log(err);
+				}
+
+			},
+
+			turn: function () {
+
+				var cx = Math.floor(this.pacman.x);
+				var cy = Math.floor(this.pacman.y);
+
+				//  This needs a threshold, because at high speeds you can't turn because the coordinates skip past
+				if (!this.math.fuzzyEqual(cx, this.turnPoint.x, this.threshold) || !this.math.fuzzyEqual(cy, this.turnPoint.y, this.threshold)) {
+					return false;
+				}
+
+				//  Grid align before turning
+				this.pacman.x = this.turnPoint.x;
+				this.pacman.y = this.turnPoint.y;
+
+				this.pacman.body.reset(this.turnPoint.x, this.turnPoint.y);
+
+				this.move(this.turning);
+
+				this.turning = Phaser.NONE;
+
+				return true;
+
+			},
+
+			move: function (direction) {
+
+				var speed = this.speed;
+				//  More awful exception handling, needed for when the player dies so this.pacman is destroyed and therefore undefined
+				try {
+					if (direction === Phaser.LEFT || direction === Phaser.UP) {
+						speed = -speed;
+					}
+
+					if (direction === Phaser.LEFT || direction === Phaser.RIGHT) {
+						this.pacman.body.velocity.x = speed;
+					}
+					else {
+						this.pacman.body.velocity.y = speed;
+					}
+
+
+					//  Reset the scale and angle (Pacman is facing to the right in the sprite sheet)
+					this.pacman.scale.x = 1;
+					this.pacman.angle = 0;
+
+					if (direction === Phaser.LEFT) {
+						this.pacman.scale.x = -1;
+					}
+					else if (direction === Phaser.UP) {
+						this.pacman.angle = 270;
+					}
+					else if (direction === Phaser.DOWN) {
+						this.pacman.angle = 90;
+					}
+
+					this.current = direction;
+				} catch (err) {
+					console.log(err);
+				}
+
+			},
+
+			eatDot: function (pacman, dot) {
+				var score = 0;
+				dot.kill();
+
+				//  Determine score depending on key
+				if (dot.key === 'dot') {
+					score = 100;
+				}
+				else if (dot.key === 'flower') {
+					score = 500;
+				}
+
+				//  Update score
+				this.updateScore(score);
+				//  Play pickup sound
+				this.pickup.play();
+
+				if (this.dots.total === 0) {
+					this.saveHighScore();
+					this.world.removeAll();
+					this.congratsText = this.add.text(game.world.centerX, game.world.centerY, "VICTORY!", { font: "Bold 24px Times New Roman", fill: "#00ff00", align: "center" });
+					this.congratsText.anchor.set(0.5);
+					this.victory.play();
+					this.time.removeAll();
+					this.input.onDown.add(this.goToMenu, this);
+					/*
+					//  Revive all physics groups when all dots are eaten
+					this.dots.callAll('revive');
+					this.flowers.callAll('revive');
+					this.fruit.callAll('revive');
+					//  Update high score save when the stage is complete, this will most likely be implemented in a separate function later on
+					
+
+					//  Reset Timer
+					this.stageTimer.destroy();
+					this.stageTimer = this.time.create(false);
+					this.stageTimer.start();
+					this.time.events.add(Phaser.Timer.SECOND * (Math.floor(Math.random() * 10) + 10), this.createBonus, this);
+					*/
+				}
+			},
+
+			saveHighScore: function () {
 				saveObject = {
 					highscoreValue: this.highscoreValue
 				};
 				localStorage.setItem("save", JSON.stringify(saveObject));
+			},
 
-				//  Reset Timer
-				this.stageTimer.destroy();
-				this.stageTimer = this.time.create(false);
-				this.stageTimer.start();
-				game.time.events.add(Phaser.Timer.SECOND * (Math.floor(Math.random()*10)+10), this.createBonus, this);
-			}
-		},
+			eatFruit: function (pacman, fruit) {
+				//  Kill overlapping fruit
+				fruit.kill();
+				this.powerup.play();
 
-		eatFruit: function (pacman, fruit) {
-			//  Kill overlapping fruit
-			fruit.kill();
+				if (this.aggro === 0) {
+					this.aggro = 1;
+					this.pacman.tint = 0x444444;
+				} else {
+					//  If player already under effect of fruit, remove the previous event
+					this.time.events.remove(this.timedEvent);
+					this.changeGhostSpeed(2);
+				}
+				this.timedEvent = this.time.events.add(Phaser.Timer.SECOND * this.duration, this.removeAggro, this);
+				this.changeGhostSpeed(0.5);
+			},
 
-			if (this.aggro === 0){
-				this.aggro = 1;
-				this.pacman.tint = 0x444444;
-			} else {
-				//  If player already under effect of fruit, remove the previous event
-				game.time.events.remove(this.timedEvent);
+			changeGhostSpeed: function (change) {
+				this.ghostSpeed *= change;
+				this.ghostGroup.forEach(this.changeGhostGroupVelocity, this, null, change)
+				console.log(this.ghostSpeed);
+			},
+
+			changeGhostGroupVelocity: function (ghost, change) {
+				ghost.body.velocity.x *= change;
+				ghost.body.velocity.y *= change;
+				console.log('vx ' + ghost.body.velocity.x + ' vy ' + ghost.body.velocity.y);
+			},
+
+			removeAggro: function () {
+				//  This function is only used for the 'timedEvent' callback
+				this.aggro = 0;
+				this.pacman.tint = 0xFFFFFF;
 				this.changeGhostSpeed(2);
-			}
-			this.timedEvent = game.time.events.add(Phaser.Timer.SECOND * this.duration, this.removeAggro, this);
-			this.changeGhostSpeed(0.5);
-		},
+			},
 
-		changeGhostSpeed: function(change){
-			this.ghostSpeed *= change;
-			this.ghostGroup.forEach(this.changeGhostGroupVelocity, this, null, change)
-			console.log(this.ghostSpeed);
-		},
-
-		changeGhostGroupVelocity: function(ghost, change) {
-			ghost.body.velocity.x *= change;
-			ghost.body.velocity.y *= change;
-			console.log('vx ' + ghost.body.velocity.x + ' vy ' + ghost.body.velocity.y);
-		},
-
-		removeAggro: function(){
-			//  This function is only used for the 'timedEvent' callback
-			this.aggro = 0;
-			this.pacman.tint = 0xFFFFFF;
-			this.changeGhostSpeed(2);
-		},
-
-		updateScore: function(value) {
-			//  Updates scoreValue which holds our current score. Also updates highscoreValue if (score > highscore)
-			this.scoreValue += value;
-			if (this.highscoreValue < this.scoreValue){
-				this.highscoreValue = this.scoreValue;
-			}
-			return true;
-		},
-
-		updateLifeCounter: function(value) {
-			//  Updates life counter, if life counter reaches zero display game over screen
-			this.lifeCounter += value;
-			if (this.lifeCounter === 0){
-				this.world.removeAll();
-				this.gameoverText = this.add.text(224, 248, "GAME OVER", {font: "Bold 24px Times New Roman", fill: "#ff0000", align: "left"})
-			}
-		},
-
-		createBonus: function() {
-			//  Creates the timed bonus, if it's not picked up within 10 seconds the bonus is destroyed
-			this.bonus = this.add.sprite((14 * 16), (17 * 16)+8, 'basket', 0);
-			this.bonus.anchor.set(0.5);
-			this.physics.arcade.enable(this.bonus);
-			//console.log("Bonus Created "+this.time.now);
-			game.time.events.add(Phaser.Timer.SECOND * 10, this.bonus.kill, this.bonus);
-		},
-
-		eatBonus: function() {
-			//  Destroys the timed bonus when it is picked up, updates the score counter and plays the powerup effect
-			this.bonus.kill();
-			this.updateScore(1000);
-			this.powerup.play();
-		},
-
-		createGhost: function(direction) {
-			//  Add ghost sprite and enable physics
-			var ghost = this.add.sprite((13 * 16) + 8, (11 * 16) + 8, 'ghost', 0);
-			ghost.anchor.set(0.5);
-			ghost.animations.add('float', [0, 1], 5, true);
-
-			this.physics.arcade.enable(ghost);
-			ghost.body.setSize(16, 16, 0, 0);
-
-			ghost.marker = new Phaser.Point();
-			ghost.turnPoint = new Phaser.Point();
-			ghost.turning = Phaser.NONE;
-			ghost.directions = [null, null, null, null, null];
-
-			ghost.timeSinceTurn = this.time.create(false);
-			ghost.timeSinceTurn.start();
-
-			ghost.timeSinceTele = this.time.create(false);
-			ghost.timeSinceTele.start();
-
-			
-
-			ghost.play('float');
-			this.moveGhost(ghost, direction);
-			return ghost;
-		},
-
-		positionPacman: function(){
-			//  Position Pacman at grid location 14x17 (the +8 accounts for his anchor)
-			this.pacman = this.add.sprite((14 * 16) + 8, (17 * 16) + 8, 'pacman', 0);
-			this.pacman.anchor.set(0.5);
-			this.pacman.animations.add('munch', [0, 1, 2, 1], 10, true);
-
-			this.physics.arcade.enable(this.pacman);
-			this.pacman.body.setSize(16, 16, 0, 0);
-			this.pacman.play('munch');
-			this.move(Phaser.LEFT);
-		},
-
-		checkAggro: function(pacman, ghost){
-			if (this.aggro === 0){
-				this.eatPlayer();
-			} else {
-				this.eatGhost(ghost);
-			}
-		},
-
-		update: function () {
-			this.physics.arcade.collide(this.pacman, this.layer);
-
-			this.physics.arcade.overlap(this.pacman, this.dots, this.eatDot, null, this);
-			this.physics.arcade.overlap(this.pacman, this.flowers, this.eatDot, null, this);
-			this.physics.arcade.overlap(this.pacman, this.fruit, this.eatFruit, null, this);
-			//  Calls the eatBonus function if the pacman sprite overlaps with the bonus sprite
-			this.physics.arcade.overlap(this.pacman, this.bonus, this.eatBonus, null, this);
-			this.physics.arcade.overlap(this.pacman, this.ghostGroup, this.checkAggro, null, this)
-
-			//  Update player markers
-			this.marker.x = this.math.snapToFloor(Math.floor(this.pacman.x), this.gridsize) / this.gridsize;
-			this.marker.y = this.math.snapToFloor(Math.floor(this.pacman.y), this.gridsize) / this.gridsize;
-
-			//  Update ghost markers
-			this.ghostGroup.forEach(this.updateGhostMarkers, this, null);
-
-			//  Check if player is about to teleport
-			if(this.marker.x < 0 || this.marker.x > 27){
-				this.pacman.x = game.width - this.pacman.x;
-			}
-
-			//  Check if ghost is about to teleport
-			this.ghostGroup.forEach(this.ghostTeleport, this, null);
-
-			//  Update text
-			this.score.setText(this.scoreValue);
-			this.highscore.setText(this.highscoreValue);
-			this.lifeText.setText(this.lifeCounter);
-			this.timerText.setText(this.stageTimer.seconds.toFixed(3));
-
-			//  Update our grid sensors
-			this.directions[1] = this.map.getTileLeft(this.layer.index, this.marker.x, this.marker.y);
-			this.directions[2] = this.map.getTileRight(this.layer.index, this.marker.x, this.marker.y);
-			this.directions[3] = this.map.getTileAbove(this.layer.index, this.marker.x, this.marker.y);
-			this.directions[4] = this.map.getTileBelow(this.layer.index, this.marker.x, this.marker.y);
-
-			this.checkKeys();
-
-			if (this.turning !== Phaser.NONE)
-			{
-				this.turn();
-			}
-
-			this.ghostGroup.forEach(this.ghostAI, this, true);
-
-		},
-
-		updateGhostMarkers: function(ghost) {
-			ghost.marker.x = this.math.snapToFloor(Math.ceil(ghost.x), this.gridsize) / this.gridsize;
-			ghost.marker.y = this.math.snapToFloor(Math.ceil(ghost.y), this.gridsize) / this.gridsize;
-		},
-
-		ghostTeleport: function(ghost) {
-			
-			if(ghost.marker.x < 0 || ghost.marker.x > 27 && ghost.timeSinceTele.ms > this.delay){
-				if ( ghost.marker.x < 0) {
-					ghost.x = 0;
+			updateScore: function (value) {
+				//  Updates scoreValue which holds our current score. Also updates highscoreValue if (score > highscore)
+				this.scoreValue += value;
+				if (this.highscoreValue < this.scoreValue) {
+					this.highscoreValue = this.scoreValue;
 				}
-				ghost.x = game.width - ghost.x;
-				ghost.timeSinceTele.destroy();
-				ghost.timeSinceTele = this.time.create(false);
-				ghost.timeSinceTele.start();
-			}
-		},
+				return true;
+			},
 
-		ghostAI : function (ghost) {
-			var openDirs = this.checkGhostDirections(ghost);
-			var i=0;
-			var currentDirection = this.ghostAngle(ghost);
-			var rand;
-			var open_path;
-
-			if (openDirs.length === 2 && (ghost.directions[currentDirection].index !== this.safetile)){
-				open_path = openDirs[0];
-				if (openDirs[0] === this.opposites[currentDirection]){
-					open_path = openDirs[1];
+			updateLifeCounter: function (value) {
+				//  Updates life counter, if life counter reaches zero display game over screen
+				this.lifeCounter += value;
+				if (this.lifeCounter === 0) {
+					this.saveHighScore();
+					this.world.removeAll();
+					this.gameoverText = this.add.text(game.world.centerX, game.world.centerY, "GAME OVER", { font: "Bold 24px Times New Roman", fill: "#ff0000", align: "center" });
+					this.gameoverText.anchor.set(0.5);
+					this.time.removeAll();
+					this.howl.play();
+					this.input.onDown.add(this.goToMenu, this);
 				}
+			},
 
-				ghost.turning = open_path;
+			goToMenu: function () {
+				this.howl.destroy();
+				this.music.destroy();
+				game.state.start('Menu', true, false);
+			},
 
-				ghost.turnPoint.x = (ghost.marker.x * this.gridsize) + (this.gridsize / 2);
-				ghost.turnPoint.y = (ghost.marker.y * this.gridsize) + (this.gridsize / 2);
-
-			}else if (openDirs.length > 2 && ghost.timeSinceTurn.ms > this.delay){
-				rand = Math.floor(Math.random()*(openDirs.length));
-				open_path = openDirs[rand];
-				while(open_path === this.opposites[currentDirection]){
-					rand = Math.floor(Math.random()*(openDirs.length));
-					open_path = openDirs[rand];
+			locateBonusSpawn: function () {
+				var spawnTile, bonusSpawnX = 13 * 16, bonusSpawnY = 11 * 16;
+				//  Locate pacman's spawn point
+				if (!this.bonusSpawnX && !this.bonusSpawnY) {
+					spawnTile = this.findSpawnLocation(40);
+					if (spawnTile) {
+						bonusSpawnX = spawnTile[0];
+						bonusSpawnY = spawnTile[1];
+						console.log('bonus spawn point found');
+					} else {
+						console.log('bonus spawn point not found');
+					}
+					this.bonusSpawnX = bonusSpawnX;
+					this.bonusSpawnY = bonusSpawnY;
 				}
-				ghost.turning = open_path;
+			},
 
-				ghost.turnPoint.x = (ghost.marker.x * this.gridsize) + (this.gridsize / 2);
-				ghost.turnPoint.y = (ghost.marker.y * this.gridsize) + (this.gridsize / 2);
+			createBonus: function () {
+				console.log('bonus duration ' + this.bonusDuration);
+				//  Creates the timed bonus, if it's not picked up within 10 seconds the bonus is destroyed
+				this.bonus = this.add.sprite(this.bonusSpawnX, this.bonusSpawnY + 8, 'basket', 0);
+				this.bonus.anchor.set(0.5);
+				this.physics.arcade.enable(this.bonus);
+				//console.log("Bonus Created "+this.time.now);
+				this.bonusTimeActive = this.time.create(false);
+				this.bonusTimeActive.start();
+				this.time.events.add(Phaser.Timer.SECOND * this.bonusDuration, this.bonus.kill, this.bonus);
+				this.time.events.add(Phaser.Timer.SECOND * this.bonusDuration, this.bonusTimeActive.destroy, this.bonusTimeActive);
+			},
 
-				ghost.timeSinceTurn.destroy();
+			reloadBonus: function () {
+				var bonusTimeActive = this.bonusTimeActive.seconds;
+				this.bonus.destroy();
+				this.bonusTimeActive.destroy();
+				this.bonusDuration = 10.0 - bonusTimeActive;
+				this.createBonus();
+			},
+
+			eatBonus: function () {
+				//  Destroys the timed bonus when it is picked up, updates the score counter and plays the bonus pick up effect
+				this.bonus.kill();
+				this.bonusIsActive = true;
+				this.time.events.add(Phaser.Timer.SECOND * 10, this.deactivateBonus, this);
+				this.updateScore(1000);
+				this.bonusPickup.play();
+			},
+
+			deactivateBonus: function () {
+				console.log('deactivating bonus');
+				this.bonusIsActive = false;
+			},
+
+			createGhost: function (direction) {
+				var spawnTile, ghostSpawnX = 13 * 16, ghostSpawnY = 11 * 16;
+				//  Locate pacman's spawn point
+				if (!this.ghostSpawnX && !this.ghostSpawnY) {
+					spawnTile = this.findSpawnLocation(38);
+					if (spawnTile) {
+						ghostSpawnX = spawnTile[0];
+						ghostSpawnY = spawnTile[1];
+						console.log('wolf spawn point found');
+					} else {
+						console.log('wolf spawn point not found');
+					}
+					this.ghostSpawnX = ghostSpawnX;
+					this.ghostSpawnY = ghostSpawnY;
+				}
+				//  Add ghost sprite and enable physics
+				var ghost = this.add.sprite(this.ghostSpawnX, this.ghostSpawnY, 'ghost', 0);
+				ghost.anchor.set(0.5);
+				ghost.animations.add('float', [0, 1, 2, 3], 4, true);
+
+				this.physics.arcade.enable(ghost);
+				ghost.body.setSize(16, 16, 0, 0);
+
+				ghost.marker = new Phaser.Point();
+				ghost.turnPoint = new Phaser.Point();
+				ghost.turning = Phaser.NONE;
+				ghost.directions = [null, null, null, null, null];
+
 				ghost.timeSinceTurn = this.time.create(false);
 				ghost.timeSinceTurn.start();
-			}else{
-				ghost.turning = Phaser.NONE;
-			}
-			if (ghost.turning !== Phaser.NONE && ghost.turning !== currentDirection){
-				this.ghostTurn(ghost);
-			}
-		},
 
-		checkGhostDirections: function(ghost) {
-			var i;
-			var openDirs = [];
-			ghost.directions[1] = this.map.getTileLeft(this.layer.index, ghost.marker.x, ghost.marker.y);
-			ghost.directions[2] = this.map.getTileRight(this.layer.index, ghost.marker.x, ghost.marker.y);
-			ghost.directions[3] = this.map.getTileAbove(this.layer.index, ghost.marker.x, ghost.marker.y);
-			ghost.directions[4] = this.map.getTileBelow(this.layer.index, ghost.marker.x, ghost.marker.y);
-			
-			for(i=1; i<=4; i++){
-				//console.log(ghost.directions[i].index)
-				if(ghost.marker.x > 0 && ghost.marker.x < 27){
-					if(ghost.directions[i].index === this.safetile){
-						openDirs.push(i);
+				ghost.timeSinceTele = this.time.create(false);
+				ghost.timeSinceTele.start();
+
+				ghost.play('float');
+				this.moveGhost(ghost, direction);
+
+				this.reloadCircle();
+				return ghost;
+			},
+
+			positionPacman: function () {
+				var spawnTile, pacmanSpawnX = 14 * 16, pacmanSpawnY = 17 * 16;
+				//  Locate pacman's spawn point
+				if (!this.pacmanSpawnX && !this.pacmanSpawnY) {
+					spawnTile = this.findSpawnLocation(37);
+					if (spawnTile) {
+						pacmanSpawnX = spawnTile[0];
+						pacmanSpawnY = spawnTile[1];
+						console.log('pacman spawn point found');
+					} else {
+						console.log('pacman spawn point not found');
+					}
+					this.pacmanSpawnX = pacmanSpawnX;
+					this.pacmanSpawnY = pacmanSpawnY;
+				}
+				//  Position Pacman at grid location 14x17 (the +8 accounts for his anchor)
+				this.pacman = this.add.sprite(this.pacmanSpawnX + 8, this.pacmanSpawnY + 8, 'pacman', 0);
+				this.pacman.anchor.set(0.5);
+				this.pacman.animations.add('munch', [0, 1, 2], 10, true);
+
+				this.physics.arcade.enable(this.pacman);
+				this.pacman.body.setSize(16, 16, 0, 0);
+				this.pacman.play('munch');
+				this.move(Phaser.LEFT);
+			},
+
+			findSpawnLocation: function (spawnIndex) {
+				var spawnTile, spawnX, spawnY;
+				//  Search map to find the tile that indicates the sprite's spawn point and replace it with the safe tile.
+				//  Return the spawn's coordinates if found, otherwise return null
+				if (spawnTile = this.map.searchTileIndex(spawnIndex)) {
+					spawnX = spawnTile.x * 16;
+					spawnY = spawnTile.y * 16;
+					console.log('spawn point found ' + String(spawnX) + ' ' + String(spawnY));
+					this.map.replace(spawnIndex, this.safetile, 0, 0, 28, 31)
+					return [spawnX, spawnY];
+				}
+				return null;
+			},
+
+			checkAggro: function (pacman, ghost) {
+				if (this.aggro === 0) {
+					this.eatPlayer();
+				} else {
+					this.eatGhost(ghost);
+				}
+			},
+
+			createRock: function () {
+				var spawnTile, rockSpawnX = 16 * 16, rockSpawnY = 17 * 16;
+				//  Locate rock's spawn point
+				if (!this.rockSpawnX && !this.rockSpawnY) {
+					spawnTile = this.findSpawnLocation(39);
+					if (spawnTile) {
+						rockSpawnX = spawnTile[0];
+						rockSpawnY = spawnTile[1];
+						console.log('rock spawn point found');
+					} else {
+						console.log('rock spawn point not found');
+					}
+					this.rockSpawnX = rockSpawnX;
+					this.rockSpawnY = rockSpawnY;
+				}
+
+				this.rock = this.add.sprite(this.rockSpawnX, this.rockSpawnY, 'rock', 0);
+				this.physics.arcade.enable(this.rock);
+				this.rock.counter = 0;
+				this.rock.collision = true;
+				this.rock.spawning = false;
+				this.rock.flying = false;
+				this.rock.targetsHit = 0;
+			},
+
+			readdRock: function () {
+				this.rock.destroy();
+				this.createRock();
+				this.reloadCircle();
+			},
+
+			pickRock: function () {
+				if (this.rock.collision === true) {
+					this.rock.kill();
+					this.rockPickup.play();
+					this.rock.counter += 1;
+					console.log('rock counter: ' + this.rock.counter);
+				}
+			},
+
+			throwRock: function () {
+				if (this.rock.counter > 0) {
+					this.rock.collision = false;
+					this.rock.flying = true;
+					this.rock.reset(this.pacman.body.x, this.pacman.body.y);
+					this.rock.counter -= 1;
+					if (this.pacman.angle === 0 && this.pacman.scale.x === 1) {
+						this.rock.body.velocity.x = this.speed * 3;
+					} else if (this.pacman.angle === 90) {
+						this.rock.body.velocity.y = this.speed * 3;
+					} else if (this.pacman.angle === 0 && this.pacman.scale.x === -1) {
+						this.rock.body.velocity.x = -this.speed * 3;
+					} else if (this.pacman.angle === -90) {
+						this.rock.body.velocity.y = -this.speed * 3;
+					}
+					console.log('rock counter: ' + this.rock.counter);
+				}
+
+			},
+
+			enableRockCollision: function () {
+				console.log('rock hit wall');
+				this.rock.collision = true;
+				this.rock.flying = false;
+				if (this.rock.targetsHit > 0) {
+					this.rock.kill();
+				}
+				this.thud.play();
+			},
+
+			stoneGhost: function (rock, ghost) {
+				if (this.rock.flying === true) {
+					console.log('stoning wolf');
+					this.eatGhost(ghost);
+					this.rock.targetsHit += 1;
+				}
+			},
+
+			update: function () {
+				//  When pacman is killed, this.pacman is destroyed and therefore undefined
+				try {
+					if (this.nightMode) {
+						this.circle.x = this.pacman.body.x
+						this.circle.y = this.pacman.body.y
+					}
+				} catch (err) {
+					console.log(err);
+				}
+				this.physics.arcade.collide(this.pacman, this.layer);
+				this.physics.arcade.collide(this.rock, this.layer, this.enableRockCollision, null, this);
+
+				this.physics.arcade.overlap(this.pacman, this.dots, this.eatDot, null, this);
+				this.physics.arcade.overlap(this.pacman, this.flowers, this.eatDot, null, this);
+				this.physics.arcade.overlap(this.pacman, this.fruit, this.eatFruit, null, this);
+
+				this.physics.arcade.overlap(this.pacman, this.rock, this.pickRock, null, this);
+				this.physics.arcade.overlap(this.rock, this.ghostGroup, this.stoneGhost, null, this);
+
+				//  Calls the eatBonus function if the pacman sprite overlaps with the bonus sprite
+				this.physics.arcade.overlap(this.pacman, this.bonus, this.eatBonus, null, this);
+				this.physics.arcade.overlap(this.pacman, this.ghostGroup, this.checkAggro, null, this)
+
+				//  Update player markers
+				this.marker.x = this.math.snapToFloor(Math.floor(this.pacman.x), this.gridsize) / this.gridsize;
+				this.marker.y = this.math.snapToFloor(Math.floor(this.pacman.y), this.gridsize) / this.gridsize;
+
+				//  Update ghost markers
+				this.ghostGroup.forEach(this.updateGhostMarkers, this, null);
+
+				//  Check if player is about to teleport
+				if (this.marker.x < 0 || this.marker.x > 27) {
+					this.pacman.x = game.width - this.pacman.x;
+				}
+
+				//  Check if ghost is about to teleport
+				this.ghostGroup.forEach(this.ghostTeleport, this, null);
+
+				//  Update text
+				this.score.setText(this.scoreValue);
+				this.highscore.setText(this.highscoreValue);
+				this.lifeText.setText(this.lifeCounter);
+				this.timerText.setText(this.stageTimer.seconds.toFixed(3));
+
+				//  Update our grid sensors
+				this.directions[1] = this.map.getTileLeft(this.layer.index, this.marker.x, this.marker.y);
+				this.directions[2] = this.map.getTileRight(this.layer.index, this.marker.x, this.marker.y);
+				this.directions[3] = this.map.getTileAbove(this.layer.index, this.marker.x, this.marker.y);
+				this.directions[4] = this.map.getTileBelow(this.layer.index, this.marker.x, this.marker.y);
+
+				this.checkKeys();
+
+				if (this.turning !== Phaser.NONE) {
+					this.turn();
+				}
+
+				//  Move each ghost
+				this.ghostGroup.forEach(this.ghostAI, this, true);
+
+				//  If rock has been consumed, add a respawn timer
+				if (this.rock.counter === 0 && !this.rock.alive && !this.rock.spawning && !this.rock.flying) {
+					console.log('respawning rock in 10s');
+					this.rock.spawning = true;
+					this.time.events.add(Phaser.Timer.SECOND * (Math.floor(Math.random() * 10) + 10), this.readdRock, this);
+				}
+
+				//  If bonus is active and night mode is on, make the circle larger. When bonus becomes inactive, make circle smaller.
+				if (this.nightMode) {
+					if (this.bonusIsActive) {
+						if (this.currentCircleScale < 1.3) {
+							console.log('making circle larger');
+							this.currentCircleScale += 0.0025;
+						}
+					} else if (!this.bonusIsActive) {
+						if (this.currentCircleScale > 1.0) {
+							console.log('making circle smaller');
+							this.currentCircleScale -= 0.0025;
+						}
+					}
+					this.circle.scale.set(this.currentCircleScale);
+				}
+			},
+
+			updateGhostMarkers: function (ghost) {
+				ghost.marker.x = this.math.snapToFloor(Math.ceil(ghost.x), this.gridsize) / this.gridsize;
+				ghost.marker.y = this.math.snapToFloor(Math.ceil(ghost.y), this.gridsize) / this.gridsize;
+			},
+
+			ghostTeleport: function (ghost) {
+
+				if (ghost.marker.x < 0 || ghost.marker.x > 27 && ghost.timeSinceTele.ms > this.delay) {
+					if (ghost.marker.x < 0) {
+						ghost.x = 0;
+					}
+					ghost.x = game.width - ghost.x;
+					ghost.timeSinceTele.destroy();
+					ghost.timeSinceTele = this.time.create(false);
+					ghost.timeSinceTele.start();
+				}
+			},
+
+			ghostAI: function (ghost) {
+				var openDirs = this.checkGhostDirections(ghost);
+				var i = 0;
+				var currentDirection = this.ghostAngle(ghost);
+				var rand;
+				var open_path;
+
+				if (openDirs.length === 2 && (ghost.directions[currentDirection].index !== this.safetile)) {
+					open_path = openDirs[0];
+					if (openDirs[0] === this.opposites[currentDirection]) {
+						open_path = openDirs[1];
+					}
+
+					ghost.turning = open_path;
+
+					ghost.turnPoint.x = (ghost.marker.x * this.gridsize) + (this.gridsize / 2);
+					ghost.turnPoint.y = (ghost.marker.y * this.gridsize) + (this.gridsize / 2);
+
+				} else if (openDirs.length > 2 && ghost.timeSinceTurn.ms > this.delay) {
+					rand = Math.floor(Math.random() * (openDirs.length));
+					open_path = openDirs[rand];
+					while (open_path === this.opposites[currentDirection]) {
+						rand = Math.floor(Math.random() * (openDirs.length));
+						open_path = openDirs[rand];
+					}
+					ghost.turning = open_path;
+
+					ghost.turnPoint.x = (ghost.marker.x * this.gridsize) + (this.gridsize / 2);
+					ghost.turnPoint.y = (ghost.marker.y * this.gridsize) + (this.gridsize / 2);
+
+					ghost.timeSinceTurn.destroy();
+					ghost.timeSinceTurn = this.time.create(false);
+					ghost.timeSinceTurn.start();
+				} else {
+					ghost.turning = Phaser.NONE;
+				}
+				if (ghost.turning !== Phaser.NONE && ghost.turning !== currentDirection) {
+					this.ghostTurn(ghost);
+				}
+			},
+
+			checkGhostDirections: function (ghost) {
+				var i;
+				var openDirs = [];
+				ghost.directions[1] = this.map.getTileLeft(this.layer.index, ghost.marker.x, ghost.marker.y);
+				ghost.directions[2] = this.map.getTileRight(this.layer.index, ghost.marker.x, ghost.marker.y);
+				ghost.directions[3] = this.map.getTileAbove(this.layer.index, ghost.marker.x, ghost.marker.y);
+				ghost.directions[4] = this.map.getTileBelow(this.layer.index, ghost.marker.x, ghost.marker.y);
+
+				for (i = 1; i <= 4; i++) {
+					//console.log(ghost.directions[i].index)
+					if (ghost.marker.x > 0 && ghost.marker.x < 27) {
+						if (ghost.directions[i].index === this.safetile) {
+							openDirs.push(i);
+						}
 					}
 				}
-			}
 
-			return openDirs;
-		},
+				return openDirs;
+			},
 
-		ghostAngle: function(ghost) {
-			if (ghost.angle === 0 && ghost.scale.x === -1){
-				return 1;
-			}else if(ghost.angle === 0 && ghost.scale.x === 1){
-				return 2;
-			}else if (ghost.angle === -90){
-				return 3;
-			}else if (ghost.angle === 90){
-				return 4;
-			}
-		},
+			ghostAngle: function (ghost) {
+				if (ghost.angle === 0 && ghost.scale.x === -1) {
+					return 1;
+				} else if (ghost.angle === 0 && ghost.scale.x === 1) {
+					return 2;
+				} else if (ghost.angle === -90) {
+					return 3;
+				} else if (ghost.angle === 90) {
+					return 4;
+				}
+			},
 
-		moveGhost: function (ghost, direction) {
+			moveGhost: function (ghost, direction) {
 
-			var speed = this.ghostSpeed;
+				var speed = this.ghostSpeed;
 
-			if (direction === 1 || direction === 3)
-			{
-				speed = -speed;
-			}
+				if (direction === 1 || direction === 3) {
+					speed = -speed;
+				}
 
-			if (direction === 1 || direction === 2)
-			{
-				ghost.body.velocity.x = speed;
-				ghost.body.velocity.y = 0;
-			}
-			else
-			{
-				ghost.body.velocity.x = 0;
-				ghost.body.velocity.y = speed;
-			}
+				if (direction === 1 || direction === 2) {
+					ghost.body.velocity.x = speed;
+					ghost.body.velocity.y = 0;
+				}
+				else {
+					ghost.body.velocity.x = 0;
+					ghost.body.velocity.y = speed;
+				}
 
-			ghost.scale.x = 1;
-			ghost.angle = 0;
+				ghost.scale.x = 1;
+				ghost.angle = 0;
 
-			if (direction === 1)
-			{
-				ghost.scale.x = -1;
-			}
-			else if (direction === 3)
-			{
-				ghost.angle = 270;
-			}
-			else if (direction === 4)
-			{
-				ghost.angle = 90;
-			}
+				if (direction === 1) {
+					ghost.scale.x = -1;
+				}
+				else if (direction === 3) {
+					ghost.angle = 270;
+				}
+				else if (direction === 4) {
+					ghost.angle = 90;
+				}
 
-		},
+			},
 
-		ghostTurn: function (ghost) {
+			ghostTurn: function (ghost) {
 
-			var cx = Math.floor(ghost.x);
-			var cy = Math.floor(ghost.y);
+				var cx = Math.floor(ghost.x);
+				var cy = Math.floor(ghost.y);
 
-			//  This needs a threshold, because at high speeds you can't turn because the coordinates skip past
-			if (!this.math.fuzzyEqual(cx, ghost.turnPoint.x, 10) || !this.math.fuzzyEqual(cy, ghost.turnPoint.y, 10))
-			{
-				return false;
-			}
+				//  This needs a threshold, because at high speeds you can't turn because the coordinates skip past
+				if (!this.math.fuzzyEqual(cx, ghost.turnPoint.x, 10) || !this.math.fuzzyEqual(cy, ghost.turnPoint.y, 10)) {
+					return false;
+				}
 
-			//  Grid align before turning
-			ghost.x = ghost.turnPoint.x;
-			ghost.y = ghost.turnPoint.y;
+				//  Grid align before turning
+				ghost.x = ghost.turnPoint.x;
+				ghost.y = ghost.turnPoint.y;
 
 
-			ghost.body.reset(ghost.turnPoint.x, ghost.turnPoint.y);
+				ghost.body.reset(ghost.turnPoint.x, ghost.turnPoint.y);
 
-			this.moveGhost(ghost, ghost.turning);
+				this.moveGhost(ghost, ghost.turning);
 
-			ghost.turning = Phaser.NONE;
+				ghost.turning = Phaser.NONE;
 
-			return true;
+				return true;
 
-		},
+			},
 
-		eatPlayer: function() {
-			this.updateLifeCounter(-1);
-			if (this.lifeCounter > 0){
-				this.ghostGroup.destroy();
-				this.addGhosts();
+			bloodSplatter: function (sprite) {
+				this.blood = this.add.sprite(sprite.body.x + 8, sprite.body.y + 12, 'blood');
+				this.blood.anchor.set(0.5);
+				this.blood.animations.add('die', [0, 1, 2, 3, 4, 5], 6, false);
+				this.blood.play('die');
+				this.reloadCircle();
+			},
+
+			eatPlayer: function () {
+				this.updateLifeCounter(-1);
+				if (this.lifeCounter > 0) {
+					this.ghostGroup.destroy();
+
+					this.bloodSplatter(this.pacman);
+					this.growl.play();
+					this.pacman.kill();
+
+					for (var i = 0; i < this.respawnCounter; i++) {
+						this.time.events.remove(this.respawns[i]);;
+					}
+					this.respawnCounter = 0;
+
+					this.time.events.add(Phaser.Timer.SECOND, this.positionSprites, this);
+				}
+			},
+
+			positionSprites: function () {
 				this.pacman.destroy();
 				this.positionPacman();
+				this.addGhosts();
 				this.move(Phaser.LEFT);
+			},
+
+			eatGhost: function (ghost) {
+				this.bloodSplatter(ghost);
+				this.destroyGhost(ghost);
+				this.hit.play();
+				this.updateScore(1000);
+				this.respawns[this.respawnCounter] = this.time.events.add(Phaser.Timer.SECOND * 2, this.readdGhost, this);
+				this.respawnCounter += 1;
+				//this.ghostGroup.add(this.createGhost(this.randomDirection()));
+			},
+
+			readdGhost: function () {
+				this.ghostGroup.add(this.createGhost(this.randomDirection()));
+				this.respawns[this.respawnCounter] = null;
+				this.respawnCounter -= 1;
+			},
+
+			destroyGhost: function (ghost) {
+				ghost.destroy();
+			},
+
+			addGhosts: function () {
+				this.ghostGroup = this.add.group();
+				this.ghostGroup.add(this.createGhost(this.randomDirection()));
+				this.ghostGroup.add(this.createGhost(this.randomDirection()));
+				this.ghostGroup.add(this.createGhost(this.randomDirection()));
+				this.ghostGroup.add(this.createGhost(this.randomDirection()));
+			},
+
+			randomDirection: function () {
+				return Math.round(Math.random()) + 1;
+			},
+
+			reloadCircle: function () {
+				if (this.nightMode) {
+					this.circle.destroy();
+					this.circle = this.add.sprite(this.pacman.body.x, this.pacman.body.y, 'circle');
+					this.circle.anchor.set(0.5);
+					this.circle.scale.set(this.currentCircleScale);
+					if (this.bonus) {
+						if (this.bonus.alive) {
+							this.reloadBonus();
+						}
+					}
+					this.destroyText();
+					this.addText();
+				}
 			}
-		},
+		};
 
-		eatGhost: function(ghost) {
-			this.destroyGhost(ghost);
-			this.updateScore(1000);
-			this.ghostGroup.add(this.createGhost(this.randomDirection()));
-		},
-
-		destroyGhost: function(ghost) {
-			ghost.destroy();
-		},
-
-		addGhosts: function() {
-			this.ghostGroup = this.add.group();
-			this.ghostGroup.add(this.createGhost(this.randomDirection()));
-			this.ghostGroup.add(this.createGhost(this.randomDirection()));
-			this.ghostGroup.add(this.createGhost(this.randomDirection()));
-			this.ghostGroup.add(this.createGhost(this.randomDirection()));
-		},
-
-		randomDirection: function() {
-			return Math.round(Math.random())+1;
-		}
-
-	};
-
-	game.state.add('Game', Pacman, false);
-	game.state.add('Menu', Menu, true);
+		game.state.add('Game', Pacman, false);
+		game.state.add('Menu', Menu, true);
 
 	</script>
 
 </body>
+
 </html>
