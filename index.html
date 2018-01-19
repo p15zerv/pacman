@@ -18,7 +18,6 @@
 <body>
 
 	<script type="text/javascript">
-		// #216723
 		var game = new Phaser.Game(448, 496, Phaser.AUTO);
 
 		var Menu = function (game) {
@@ -40,7 +39,7 @@
 				//  Remove the next 2 lines if running locally
 				this.load.baseURL = 'https://p15zerv.github.io/pacman/';
 				this.load.crossOrigin = 'anonymous';
-				
+
 				this.load.image('stage1', 'assets/stage1.png');
 				this.load.image('stage2', 'assets/stage2.png');
 				this.load.image('play', 'assets/play.png');
@@ -128,11 +127,11 @@
 			listener: function () {
 				this.click.play();
 				this.menuMusic.destroy();
-				game.state.start('Game', true, false, this.stageNum, this.nightMode);
+				game.state.start('Game', true, false, this.stageNum, this.nightMode, this.numOfStages);
 			},
 
 
-			previousStage: function () {
+			nextStage: function () {
 				this.click.play();
 				this.stageNum += 1;
 				if (this.stageNum > this.numOfStages - 1) {
@@ -141,7 +140,7 @@
 				this.loadThumbnail();
 			},
 
-			nextStage: function () {
+			previousStage: function () {
 				this.click.play();
 				this.stageNum -= 1;
 				if (this.stageNum < 0) {
@@ -153,6 +152,47 @@
 			update: function () {
 				//this.currentModeText.setText(String(this.nightMode));
 				//this.currentStageText.setText(String(this.stageNum));
+
+			}
+		};
+
+
+		var NextStage = function (game) {
+			this.map = null;
+			this.layer = null;
+		}
+
+		NextStage.prototype = {
+			init: function (stageNum, nightMode, numOfStages) {
+				this.scale.scaleMode = Phaser.ScaleManager.SHOW_ALL;
+				this.scale.pageAlignHorizontally = true;
+				this.scale.pageAlignVertically = true;
+
+				this.stageNum = stageNum;
+				this.nightMode = nightMode;
+				this.numOfStages = numOfStages;
+			},
+
+			preload: function () {
+			},
+
+			create: function () {
+				this.advanceStage();
+			},
+
+			advanceStage: function () {
+				console.log('curr stage ' + this.stageNum + ', night ' + this.nightMode + ', stages ' + this.numOfStages);
+				this.stageNum += 1;
+				if (this.stageNum > this.numOfStages - 1) {
+					console.log('going back to menu');
+					game.state.start('Menu', true, false);
+				} else {
+					console.log('loading next stage...');
+					game.state.start('Game', true, false, this.stageNum, this.nightMode, this.numOfStages);
+				}
+			},
+
+			update: function () {
 
 			}
 		};
@@ -188,7 +228,7 @@
 
 		Pacman.prototype = {
 
-			init: function (stageNum, nightMode) {
+			init: function (stageNum, nightMode, numOfStages) {
 				this.scale.scaleMode = Phaser.ScaleManager.SHOW_ALL;
 				this.scale.pageAlignHorizontally = true;
 				this.scale.pageAlignVertically = true;
@@ -199,6 +239,8 @@
 
 				this.stageNum = stageNum;
 				this.nightMode = nightMode;
+				this.numOfStages = numOfStages;
+				console.log('curr stage ' + this.stageNum + ', night ' + this.nightMode + ', stages ' + this.numOfStages)
 
 			},
 
@@ -250,7 +292,6 @@
 				//  Red riding hood sprite by Slim: https://slimsresources.wordpress.com/
 				//  Flower sprite from: https://kandipatterns.com/patterns/misc/flower-20789
 				//  Audio effects from: https://freesound.org/people/LittleRobotSoundFactory/packs/16681/
-				//  Needless to say, graphics (C)opyright Namco
 
 			},
 
@@ -525,7 +566,7 @@
 					this.congratsText.anchor.set(0.5);
 					this.victory.play();
 					this.time.removeAll();
-					this.input.onDown.add(this.goToMenu, this);
+					this.input.onDown.add(this.nextStage, this);
 					/*
 					//  Revive all physics groups when all dots are eaten
 					this.dots.callAll('revive');
@@ -541,6 +582,11 @@
 					this.time.events.add(Phaser.Timer.SECOND * (Math.floor(Math.random() * 10) + 10), this.createBonus, this);
 					*/
 				}
+			},
+
+			nextStage: function () {
+				this.music.destroy();
+				game.state.start('NextStage', true, false, this.stageNum, this.nightMode, this.numOfStages);
 			},
 
 			saveHighScore: function () {
@@ -1150,6 +1196,7 @@
 
 		game.state.add('Game', Pacman, false);
 		game.state.add('Menu', Menu, true);
+		game.state.add('NextStage', NextStage, false);
 
 	</script>
 
